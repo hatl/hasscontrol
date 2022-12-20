@@ -356,6 +356,8 @@ module Hass {
       entityType = "input_boolean";
     } else if (entity.getType() == Entity.TYPE_BUTTON) {
       entityType = "button";
+    } else if (entity.getType() == Entity.TYPE_INPUT_BUTTON) {
+      entityType = "input_button";
     }
 
     App.getApp().viewController.showLoader(loadingText);
