@@ -22,6 +22,7 @@ module Hass {
         TYPE_AUTOMATION,
         TYPE_BUTTON,
         TYPE_INPUT_BUTTON,
+        TYPE_SENSOR,
         TYPE_UNKNOWN
     }
 
@@ -32,6 +33,7 @@ module Hass {
         STATE_UNLOCKED,
         STATE_CLOSED,
         STATE_OPEN,
+        STATE_SENSOR,
         STATE_UNKNOWN
     }
 
@@ -41,5 +43,12 @@ module Hass {
         ERROR_NOT_FOUND,
         ERROR_NOT_AUTHORIZED,
         ERROR_INVALID_URL
+    }
+
+    enum {
+        SENSOR_TEMPERATUE,
+        SENSOR_HUMIDITY,
+        SENSOR_CO2,
+        SENSOR_PM
     }
 }

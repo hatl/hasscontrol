@@ -61,7 +61,8 @@ class ViewController {
         Hass.TYPE_BINARY_SENSOR,
         Hass.TYPE_INPUT_BOOLEAN,
         Hass.TYPE_BUTTON,
-        Hass.TYPE_INPUT_BUTTON
+        Hass.TYPE_INPUT_BUTTON,
+        Hass.TYPE_SENSOR
       ]
     );
 
@@ -126,7 +127,7 @@ class ViewController {
     }
 
   }
- 
+
   function showLoader(text) {
     if (isShowingLoader()) {
       Ui.popView(Ui.SLIDE_IMMEDIATE);

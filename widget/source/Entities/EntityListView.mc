@@ -207,6 +207,7 @@ class EntityListView extends Ui.View {
 
     var type = entity.getType();
     var state = entity.getState();
+    var sensorClass = entity.getSensorClass();
 
     if (type == Hass.TYPE_LIGHT) {
         if (state == Hass.STATE_ON) {
@@ -262,6 +263,16 @@ class EntityListView extends Ui.View {
       drawable = WatchUi.loadResource(Rez.Drawables.ScriptOff);
     } else if (type == Hass.TYPE_SCENE) {
       drawable = WatchUi.loadResource(Rez.Drawables.Scene);
+    } else if (type == Hass.TYPE_SENSOR) {
+      if (sensorClass == Hass.SENSOR_TEMPERATUE) {
+        drawable = WatchUi.loadResource(Rez.Drawables.Temperature);
+      } else if (sensorClass == Hass.SENSOR_HUMIDITY) {
+        drawable = WatchUi.loadResource(Rez.Drawables.Humidity);
+      } else if (sensorClass == Hass.SENSOR_CO2) {
+        drawable = WatchUi.loadResource(Rez.Drawables.CO2);
+      } else if (sensorClass == Hass.SENSOR_PM) {
+        drawable = WatchUi.loadResource(Rez.Drawables.AirPM);
+      }
     }
 
     if (drawable == null) {

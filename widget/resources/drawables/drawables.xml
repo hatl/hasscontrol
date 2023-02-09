@@ -22,5 +22,9 @@
         <bitmap id="Unknown" filename="unknown.png" />
         <bitmap id="SmileySad" filename="smiley_sad.png" />
         <bitmap id="Button" filename="button.png" />
+        <bitmap id="Temperature" filename="temperature.png" />
+        <bitmap id="Humidity" filename="humidity.png" />
+        <bitmap id="CO2" filename="co2.png" />
+        <bitmap id="AirPM" filename="molecule.png" />
     </drawables>
 </resources>

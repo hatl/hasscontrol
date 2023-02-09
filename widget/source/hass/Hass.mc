@@ -141,12 +141,34 @@ module Hass {
 
     var name = null;
     var state = null;
+    var sensorClass = null;
+    var sensorClassStr = null;
 
     if (data != null && data[:body] != null) {
       if (data[:body]["attributes"] != null) {
         name = data[:body]["attributes"]["friendly_name"];
       }
-      state = data[:body]["state"];
+      if (data[:body]["attributes"]["unit_of_measurement"] != null) {
+        state = data[:body]["state"] + data[:body]["attributes"]["unit_of_measurement"];
+      } else {
+        state = data[:body]["state"];
+      }
+      if (data[:body]["attributes"]["device_class"] != null) {
+        sensorClassStr = data[:body]["attributes"]["device_class"];
+        if (sensorClassStr.find("temperature") != null) {
+          sensorClass = SENSOR_TEMPERATUE;
+        } else if (sensorClassStr.find("humidity") != null) {
+          sensorClass = SENSOR_HUMIDITY;
+        } else if (sensorClassStr.find("carbon_dioxide") != null) {
+          sensorClass = SENSOR_CO2;
+        } else if (sensorClassStr.find("pm25") != null) {
+          sensorClass = SENSOR_PM;
+        } else if (sensorClassStr.find("pm10") != null) {
+          sensorClass = SENSOR_PM;
+        }
+      } else {
+        sensorClass = null;
+      }
     }
 
     var entity = getEntity(data[:body]["entity_id"]);
@@ -159,6 +181,10 @@ module Hass {
       entity.setState(state);
     } else {
       entity.setState(Entity.STATE_UNKNOWN);
+    }
+
+    if (sensorClass != null) {
+      entity.setSensorClass(sensorClass);
     }
 
     if (data[:context][:callback] != null) {
@@ -235,7 +261,8 @@ module Hass {
           _entities.add(new Entity({
             :id => entities[i],
             :name => entities[i],
-            :state => null
+            :state => null,
+            :sensorClass => null
           }));
         } else {
           entity.setExternal(false);
@@ -297,10 +324,14 @@ module Hass {
     var entityType = null;
     var action = null;
     var loadingText = "Loading";
-    
+
     if (entity.getType() == Entity.TYPE_BINARY_SENSOR) {
         // binary_sensor cannot be set, only read
         return;
+    }
+    if (entity.getType() == Entity.TYPE_SENSOR) {
+      // binary_sensor cannot be set, only read
+      return;
     }
 
     if (entity.getType() == Entity.TYPE_SCRIPT) {

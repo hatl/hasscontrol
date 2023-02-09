@@ -7,6 +7,7 @@ module Hass {
         :name => dict["name"],
         :state => dict["state"],
         :ext => dict["ext"],
+        :sensorClass => dict["sensorClass"]
       });
     }
 
@@ -68,12 +69,15 @@ module Hass {
     hidden var _mName; // Name
     hidden var _mState; // Current State
     hidden var _mExt; // Is this entity loaded from settings?
+    hidden var _mSensorValue; // Custom state info text
+    hidden var _mSensorClass; // Device class for sensor
 
     function initialize(entity) {
       _mId = entity[:id];
       _mName = entity[:name];
       _mState = Entity.stringToState(entity[:state]);
       _mExt = entity[:ext] == true;
+      _mSensorClass = entity[:sensorClass];
 
       if (_mId.find("scene.") != null) {
         _mType = TYPE_SCENE;
@@ -99,6 +103,8 @@ module Hass {
         _mType = TYPE_BUTTON;
       } else if (_mId.find("input_button.") != null) {
         _mType = TYPE_INPUT_BUTTON;
+      } else if (_mId.find("sensor.") != null) {
+        _mType = TYPE_SENSOR;
       } else {
         _mType = TYPE_UNKNOWN;
       }
@@ -109,7 +115,12 @@ module Hass {
     }
 
     function getName() {
-      return _mName;
+      if (_mState == STATE_SENSOR) {
+        return _mName + "\n" + _mSensorValue;
+      }
+      else {
+        return _mName;
+      }
     }
 
     function setName(newName) {
@@ -122,7 +133,12 @@ module Hass {
 
     function setState(newState) {
       if (newState instanceof String) {
-        _mState = Entity.stringToState(newState);
+        if (_mType == TYPE_SENSOR ) {
+          _mState = STATE_SENSOR;
+          _mSensorValue = newState;
+        } else {
+          _mState = Entity.stringToState(newState);
+        }
         return;
       }
 
@@ -134,6 +150,7 @@ module Hass {
         && newState != STATE_UNLOCKED
         && newState != STATE_CLOSED
         && newState != STATE_OPEN
+        && newState != STATE_SENSOR
         && newState != STATE_UNKNOWN
       ) {
         throw new Toybox.Lang.InvalidValueException("state must be a valid Entity state");
@@ -144,6 +161,15 @@ module Hass {
 
     function getState() {
       return _mState;
+    }
+
+
+    function getSensorClass() {
+      return _mSensorClass;
+    }
+
+    function setSensorClass(newSensorClass) {
+      _mSensorClass = newSensorClass;
     }
 
     function isExternal() {
@@ -160,6 +186,7 @@ module Hass {
         "name" => _mName,
         "state" => Entity.stateToString(_mState),
         "ext" => _mExt,
+        "sensorClass" => _mSensorClass,
       };
     }
 
