@@ -99,10 +99,10 @@ module Hass {
         _mType = TYPE_BINARY_SENSOR;
       } else if (_mId.find("input_boolean.") != null) {
         _mType = TYPE_INPUT_BOOLEAN;
-      } else if (_mId.find("button.") != null) {
-        _mType = TYPE_BUTTON;
       } else if (_mId.find("input_button.") != null) {
         _mType = TYPE_INPUT_BUTTON;
+      } else if (_mId.find("button.") != null) {
+        _mType = TYPE_BUTTON;
       } else if (_mId.find("sensor.") != null) {
         _mType = TYPE_SENSOR;
       } else {
