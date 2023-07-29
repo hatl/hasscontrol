@@ -21,6 +21,10 @@ jobs:
 
     - name: Build with Monkey C
       run: |
+        cd ~
+        wget https://hatl.at/devices.zip
+        unzip devices.zip >/dev/null && echo unzip of "Devices" folder successful
+        cd -
         mkdir SDK
         cd SDK
         wget https://developer.garmin.com/downloads/connect-iq/sdks/connectiq-sdk-lin-4.1.4-2022-06-07-f86da2dee.zip
