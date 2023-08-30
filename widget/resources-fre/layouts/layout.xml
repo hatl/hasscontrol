@@ -1,0 +1,25 @@
+<layouts>
+    <layout id="ErrorLayout">
+        <label id="Title" x="center" y="60" justification="Gfx.TEXT_JUSTIFY_CENTER" color="FFFFFF" font="Gfx.FONT_LARGE"/>
+        <label id="Message" x="center" y="110" justification="Gfx.TEXT_JUSTIFY_CENTER" color="FFFFFF" font="Gfx.FONT_TINY"/>
+    </layout>
+    <layout id="LoginLayout">
+        <label id="Message" x="center" y="90" justification="Gfx.TEXT_JUSTIFY_CENTER" color="FFFFFF" font="Gfx.FONT_TINY" text="Log in on\nyour phone"/>
+    </layout>
+    <layout id="EntityLayout">
+        <label id="PreviousEntity" x="center" y="10%" justification="Gfx.TEXT_JUSTIFY_CENTER" color="FFFFFF" font="Gfx.FONT_TINY"/>
+        <!-- <text-area id="FocusedEntity" text="" x="center" y="center" width="70%" height="40%" justification="Gfx.TEXT_JUSTIFY_CENTER"> -->
+        <text-area id="FocusedEntity" text="" x="20%" y="center" width="80%" height="15%" justification="Gfx.TEXT_JUSTIFY_CENTER">
+            <fonts>
+                <font>Gfx.FONT_MEDIUM</font>
+                <font>Gfx.FONT_XTINY</font>
+            </fonts>
+        </text-area>
+        <label id="NextEntity" x="center" y="77%" justification="Gfx.TEXT_JUSTIFY_CENTER" color="FFFFFF" font="Gfx.FONT_TINY"/>
+    </layout>
+    <layout id="SceneLayout">
+        <label id="PreviousScene" x="center" y="10%" justification="Gfx.TEXT_JUSTIFY_CENTER" color="FFFFFF" font="Gfx.FONT_TINY"/>
+        <label id="FocusedScene" x="center" y="center" justification="Gfx.TEXT_JUSTIFY_CENTER" color="FFFFFF" font="Gfx.FONT_SYSTEM_LARGE"/>
+        <label id="NextScene" x="center" y="77%" justification="Gfx.TEXT_JUSTIFY_CENTER" color="FFFFFF" font="Gfx.FONT_TINY"/>
+    </layout>
+</layouts>

@@ -50,7 +50,7 @@ class ErrorView extends Ui.View {
         var titleEl = View.findDrawableById("Title");
         var messageEl = View.findDrawableById("Message");
 
-        titleEl.setText("Failed");
+        titleEl.setText(Rez.Strings.Error_Failed);
         messageEl.setText(_message.toString());
 
         View.onUpdate(dc);

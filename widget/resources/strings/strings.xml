@@ -5,9 +5,14 @@
     <!-- Entity List -->
     <string id="NoEntities">No entities configured</string>
 
-
+    <!-- Root Widget Menu -->
+    <string id="RootMenu_Entities">Entities</string>
+    <string id="RootMenu_Scenes">Scenes</string>
+    <string id="RootMenu_Settings">Settings</string>
+    <string id="RootMenu_Login">Login</string>
 
     <!-- ERROR -->
+    <string id="Error_Failed">Failed</string>
     <string id="Error_Unknown">Unknown error</string>
     <string id="Error_PhoneNotConnected">Phone not connected</string>
 
@@ -17,4 +22,8 @@
 
     <string id="Error_Auth_NotReachable">Server not reachable</string>
     <string id="Error_Auth_Revoked">Login Revoked</string>
+
+    <string id="Error_No_Entity_Toggle_1">No entity to toggle,</string>
+    <string id="Error_No_Entity_Toggle_2">please refresh group</string>
+    <string id="Error_No_Entity_Toggle_3">from settings</string>
 </strings>

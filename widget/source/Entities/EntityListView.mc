@@ -79,7 +79,7 @@ class EntityListDelegate extends Ui.BehaviorDelegate {
       _mController.toggleEntity(entity);
     } else {
       App.getApp().menu.showRootMenu();
-      App.getApp().viewController.showError("No entity to toggle,\nplease refresh group\nfrom settings");
+      App.getApp().viewController.showError(Lang.format("$1$\r\n$2$\r\n$3$", [Ui.loadResource(Rez.Strings.Error_No_Entity_Toggle_1),Ui.loadResource(Rez.Strings.Error_No_Entity_Toggle_2),Ui.loadResource(Rez.Strings.Error_No_Entity_Toggle_3)]));
     }
 
     return true;

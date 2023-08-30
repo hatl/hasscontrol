@@ -32,26 +32,26 @@ class MenuController {
 
         if (App.getApp().isLoggedIn()) {
             menu.addItem(new Ui.MenuItem(
-                "Scenes",
+                Rez.Strings.RootMenu_Scenes,
                 "",
                 MenuController.MENU_SWITCH_TO_SCENES,
                 {}
             ));
             menu.addItem(new Ui.MenuItem(
-                "Entities",
+                Rez.Strings.RootMenu_Entities,
                 "",
                 MenuController.MENU_SWITCH_TO_ENTITIES,
                 {}
             ));
             menu.addItem(new Ui.MenuItem(
-                "Settings",
+                Rez.Strings.RootMenu_Settings,
                 "",
                 MenuController.MENU_ENTER_SETTINGS,
                 {}
             ));
         } else {
             menu.addItem(new Ui.MenuItem(
-                "Login",
+                Rez.Strings.RootMenu_Login,
                 "",
                 MenuController.MENU_LOGIN,
                 {}
