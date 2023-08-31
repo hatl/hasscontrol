@@ -4,7 +4,7 @@
         <label id="Message" x="center" y="110" justification="Gfx.TEXT_JUSTIFY_CENTER" color="FFFFFF" font="Gfx.FONT_TINY"/>
     </layout>
     <layout id="LoginLayout">
-        <label id="Message" x="center" y="90" justification="Gfx.TEXT_JUSTIFY_CENTER" color="FFFFFF" font="Gfx.FONT_TINY" text="Log in on\nyour phone"/>
+        <label id="Message" x="center" y="90" justification="Gfx.TEXT_JUSTIFY_CENTER" color="FFFFFF" font="Gfx.FONT_TINY" text="Connectez-vous\nsur votre téléphone"/>
     </layout>
     <layout id="EntityLayout">
         <label id="PreviousEntity" x="center" y="10%" justification="Gfx.TEXT_JUSTIFY_CENTER" color="FFFFFF" font="Gfx.FONT_TINY"/>

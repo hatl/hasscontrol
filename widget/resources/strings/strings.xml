@@ -5,11 +5,17 @@
     <!-- Entity List -->
     <string id="NoEntities">No entities configured</string>
 
-    <!-- Root Widget Menu -->
-    <string id="RootMenu_Entities">Entities</string>
-    <string id="RootMenu_Scenes">Scenes</string>
-    <string id="RootMenu_Settings">Settings</string>
-    <string id="RootMenu_Login">Login</string>
+    <!-- Generic terms -->
+    <string id="Generic_Login">Login</string>
+    <string id="Generic_Logout">Logout</string>
+    <string id="Generic_Settings">Settings</string>
+    <string id="Generic_Scenes">Scenes</string>
+    <string id="Generic_Entities">Entities</string>
+    <string id="Generic_Back">Back</string>
+
+    <!-- Settings Menu -->
+    <string id="SettingsMenu_Start_View">Start View</string>
+    <string id="SettingsMenu_Refresh_Entities">Refresh entities</string>
 
     <!-- ERROR -->
     <string id="Error_Failed">Failed</string>

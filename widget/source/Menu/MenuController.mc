@@ -32,26 +32,26 @@ class MenuController {
 
         if (App.getApp().isLoggedIn()) {
             menu.addItem(new Ui.MenuItem(
-                Rez.Strings.RootMenu_Scenes,
+                Rez.Strings.Generic_Scenes,
                 "",
                 MenuController.MENU_SWITCH_TO_SCENES,
                 {}
             ));
             menu.addItem(new Ui.MenuItem(
-                Rez.Strings.RootMenu_Entities,
+                Rez.Strings.Generic_Entities,
                 "",
                 MenuController.MENU_SWITCH_TO_ENTITIES,
                 {}
             ));
             menu.addItem(new Ui.MenuItem(
-                Rez.Strings.RootMenu_Settings,
+                Rez.Strings.Generic_Settings,
                 "",
                 MenuController.MENU_ENTER_SETTINGS,
                 {}
             ));
         } else {
             menu.addItem(new Ui.MenuItem(
-                Rez.Strings.RootMenu_Login,
+                Rez.Strings.Generic_Login,
                 "",
                 MenuController.MENU_LOGIN,
                 {}
@@ -63,23 +63,23 @@ class MenuController {
 
     function showSettingsMenu() {
         var menu = new Ui.Menu2({
-            :title => "Settings"
+            :title => Rez.Strings.Generic_Settings
         });
 
         menu.addItem(new Ui.MenuItem(
-            "Start View",
+            Rez.Strings.SettingsMenu_Start_View,
             App.getApp().getStartView(),
             MenuController.MENU_SELECT_START_VIEW,
             {}
         ));
         menu.addItem(new Ui.MenuItem(
-            "Refresh entities",
+            Rez.Strings.SettingsMenu_Refresh_Entities,
             Hass.getGroup(),
             MenuController.MENU_REFRESH_ENTITIES,
             {}
         ));
         menu.addItem(new Ui.MenuItem(
-            "Logout",
+            Rez.Strings.Generic_Logout,
             "",
             MenuController.MENU_LOGOUT,
             {}
@@ -90,7 +90,7 @@ class MenuController {
 
     function showSelectStartViewMenu() {
         var menu = new Ui.Menu2({
-            :title => "Start view"
+            :title => Rez.Strings.SettingsMenu_Start_View
         });
 
         var currentStartView = App.getApp().getStartView();
@@ -106,21 +106,21 @@ class MenuController {
         }
 
         menu.addItem(new Ui.MenuItem(
-            "Entities",
+            Rez.Strings.Generic_Entities,
             entitiesSubtitle,
             MenuController.MENU_SELECT_START_VIEW_ENTITIES,
             {}
         ));
 
         menu.addItem(new Ui.MenuItem(
-            "Scenes",
+            Rez.Strings.Generic_Scenes,
             scenesSubtitle,
             MenuController.MENU_SELECT_START_VIEW_SCENES,
             {}
         ));
 
         menu.addItem(new Ui.MenuItem(
-            "Back",
+            Rez.Strings.Generic_Back,
             "",
             MenuController.MENU_BACK,
             {}

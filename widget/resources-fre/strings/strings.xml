@@ -5,12 +5,17 @@
     <!-- Entity List -->
     <string id="NoEntities">Aucune entité configurée</string>
 
-    <!-- Root Widget Menu -->
-    
-    <string id="RootMenu_Entities">Entités</string>
-    <string id="RootMenu_Scenes">Scènes</string>
-    <string id="RootMenu_Settings">Paramètres</string>
-    <string id="RootMenu_Login">Se connecter</string>
+    <!-- Generic terms -->
+    <string id="Generic_Login">Se connecter</string>
+    <string id="Generic_Logout">Se déconnecter</string>
+    <string id="Generic_Settings">Paramètres</string>
+    <string id="Generic_Scenes">Scènes</string>
+    <string id="Generic_Entities">Entités</string>
+    <string id="Generic_Back">Retour</string>
+
+    <!-- Settings Menu -->
+    <string id="SettingsMenu_Start_View">Start View</string>
+    <string id="SettingsMenu_Refresh_Entities">Refresh entities</string>
 
     <!-- ERROR -->
     <string id="Error_Failed">Échec</string>
