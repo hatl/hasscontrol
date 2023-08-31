@@ -12,10 +12,21 @@
     <string id="Generic_Scenes">Scènes</string>
     <string id="Generic_Entities">Entités</string>
     <string id="Generic_Back">Retour</string>
+    <string id="Generic_Refreshing">Rafraîchissement en cours</string>
+
+    <!-- Loading Texts -->
+    <string id="LoadingText_Running">En cours d'éxécution</string>
+    <string id="LoadingText_Locking">Verouillage</string>
+    <string id="LoadingText_Unlocking">Déverouillage</string>
+    <string id="LoadingText_Closing">Fermeture</string>
+    <string id="LoadingText_Opening">Ouverture</string>
+    <string id="LoadingText_Pressing">Pression</string>
+    <string id="LoadingText_Turning_Off">Extinction</string>
+    <string id="LoadingText_Turning_On">Allumage</string>
 
     <!-- Settings Menu -->
-    <string id="SettingsMenu_Start_View">Start View</string>
-    <string id="SettingsMenu_Refresh_Entities">Refresh entities</string>
+    <string id="SettingsMenu_Start_View">Vue de départ</string>
+    <string id="SettingsMenu_Refresh_Entities">Rafraîchir les entités</string>
 
     <!-- ERROR -->
     <string id="Error_Failed">Échec</string>
@@ -29,7 +40,7 @@
     <string id="Error_Auth_NotReachable">Serveur non joignable</string>
     <string id="Error_Auth_Revoked">Identifiant révoqué</string>
 
-    <string id="Error_No_Entity_Toggle_1">Aucune entité à ajuster,</string>
-    <string id="Error_No_Entity_Toggle_2">actualisez le groupe depuis</string>
-    <string id="Error_No_Entity_Toggle_3">les paramètres du widget</string>
+    <string id="Error_No_Entity_Toggle">Aucune entité à basculer,\nactualisez le groupe depuis\nles paramètres du widget</string>
+
+    <string id="Error_Group_Not_Configured">Groupe\nnon\nconfiguré</string>
 </strings>
