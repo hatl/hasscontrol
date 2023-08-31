@@ -1,0 +1,40 @@
+<resources>
+    <properties>
+        <property id="host" type="string">https://hassio.url</property>
+        <!-- <property id="port" type="number">443</property> -->
+        <property id="accessToken" type="string"></property>
+        <property id="scenes" type="string"></property>
+        <property id="group" type="string">Garmin</property>
+        <property id="refresh" type="boolean"></property>
+    </properties>
+
+    <strings>
+       <string id="host_title">Hôte: (exemple: https://hassio.url)</string>
+       <!-- <string id="port_title">Port: (443 is default for https)</string> -->
+       <string id="access_token">Token d'accès longue durée (Optionnel)</string>
+       <string id="scenes_title">Scènes: (scene1,scene2,scene3)</string>
+       <string id="group_title">Groupe: (Groupe utilisé pour importer des entités)</string>
+       <string id="refresh_title">Rafraichir dés l'affichage (Utilise plus de batterie et de ressource réseau)</string>
+    </strings>
+
+    <settings>
+        <setting propertyKey="@Properties.host" title="@Strings.host_title">
+            <settingConfig type="alphaNumeric" />
+        </setting>
+        <!-- <setting propertyKey="@Properties.port" title="@Strings.port_title">
+            <settingConfig min="1" max="65535" type="numeric" />
+        </setting> -->
+        <setting propertyKey="@Properties.accessToken" title="@Strings.access_token">
+            <settingConfig type="alphaNumeric" />
+        </setting>
+        <setting propertyKey="@Properties.scenes" title="@Strings.scenes_title">
+            <settingConfig type="alphaNumeric" />
+        </setting>
+        <setting propertyKey="@Properties.group" title="@Strings.group_title">
+            <settingConfig type="alphaNumeric" />
+        </setting>
+        <setting propertyKey="@Properties.refresh" title="@Strings.refresh_title">
+            <settingConfig type="boolean" />
+        </setting>
+    </settings>
+</resources>

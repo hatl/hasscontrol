@@ -282,11 +282,11 @@ module Hass {
     var group = getGroup();
 
     if (group == null) {
-      App.getApp().viewController.showError("Group\nnot\nconfigured");
+      App.getApp().viewController.showError(Ui.loadResource(Rez.Strings.Error_Group_Not_Configured));
       return;
     }
 
-    App.getApp().viewController.showLoader("Refreshing");
+    App.getApp().viewController.showLoader(Rez.Strings.Generic_Refreshing);
 
     client.getEntity(group, null, Utils.method(Hass, :_onReceiveEntities));
   }
@@ -336,33 +336,33 @@ module Hass {
 
     if (entity.getType() == Entity.TYPE_SCRIPT) {
       action = Client.ENTITY_ACTION_TURN_ON;
-      loadingText = "Running";
+      loadingText = Rez.Strings.LoadingText_Running;
     } else if (entity.getType() == Entity.TYPE_LOCK) {
       if (currentState == Entity.STATE_UNLOCKED) {
         action = Client.ENTITY_ACTION_LOCK;
-        loadingText = "Locking";
+        loadingText = Rez.Strings.LoadingText_Locking;
       } else if (currentState == Entity.STATE_LOCKED) {
         action = Client.ENTITY_ACTION_UNLOCK;
-        loadingText = "Unlocking";
+        loadingText = Rez.Strings.LoadingText_Unlocking;
       }
     } else if (entity.getType() == Entity.TYPE_COVER) {
       if (currentState == Entity.STATE_OPEN) {
         action = Client.ENTITY_ACTION_CLOSE_COVER;
-        loadingText = "Closing";
+        loadingText = Rez.Strings.LoadingText_Closing;
       } else if (currentState == Entity.STATE_CLOSED) {
         action = Client.ENTITY_ACTION_OPEN_COVER;
-        loadingText = "Opening";
+        loadingText = Rez.Strings.LoadingText_Opening;
       }
     } else if (entity.getType() == Entity.TYPE_BUTTON || entity.getType() == Entity.TYPE_INPUT_BUTTON) {
       action = Client.ENTITY_ACTION_PRESS;
-      loadingText = "Pressing";
+      loadingText = Rez.Strings.LoadingText_Pressing;
     } else {
       if (currentState == Entity.STATE_ON) {
         action = Client.ENTITY_ACTION_TURN_OFF;
-        loadingText = "Turning off";
+        loadingText = Rez.Strings.LoadingText_Turning_Off;
       } else if (currentState == Entity.STATE_OFF) {
         action = Client.ENTITY_ACTION_TURN_ON;
-        loadingText = "Turning on";
+        loadingText = Rez.Strings.LoadingText_Turning_On;
       }
     }
 

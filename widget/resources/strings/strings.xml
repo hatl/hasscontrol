@@ -5,9 +5,31 @@
     <!-- Entity List -->
     <string id="NoEntities">No entities configured</string>
 
+    <!-- Generic terms -->
+    <string id="Generic_Login">Login</string>
+    <string id="Generic_Logout">Logout</string>
+    <string id="Generic_Settings">Settings</string>
+    <string id="Generic_Scenes">Scenes</string>
+    <string id="Generic_Entities">Entities</string>
+    <string id="Generic_Back">Back</string>
+    <string id="Generic_Refreshing">Refreshing</string>
 
+    <!-- Loading Texts -->
+    <string id="LoadingText_Running">Running</string>
+    <string id="LoadingText_Locking">Locking</string>
+    <string id="LoadingText_Unlocking">Unlocking</string>
+    <string id="LoadingText_Closing">Closing</string>
+    <string id="LoadingText_Opening">Opening</string>
+    <string id="LoadingText_Pressing">Pressing</string>
+    <string id="LoadingText_Turning_Off">Turning off</string>
+    <string id="LoadingText_Turning_On">Turning on</string>
+
+    <!-- Settings Menu -->
+    <string id="SettingsMenu_Start_View">Start View</string>
+    <string id="SettingsMenu_Refresh_Entities">Refresh entities</string>
 
     <!-- ERROR -->
+    <string id="Error_Failed">Failed</string>
     <string id="Error_Unknown">Unknown error</string>
     <string id="Error_PhoneNotConnected">Phone not connected</string>
 
@@ -17,4 +39,8 @@
 
     <string id="Error_Auth_NotReachable">Server not reachable</string>
     <string id="Error_Auth_Revoked">Login Revoked</string>
+
+    <string id="Error_No_Entity_Toggle">No entity to toggle,\nplease refresh group\nfrom settings</string>
+
+    <string id="Error_Group_Not_Configured">Group\nnot\nconfigured</string>
 </strings>

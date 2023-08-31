@@ -168,7 +168,7 @@ class ViewController {
   function showError(error) {
     removeLoaderImmediate();
 
-    var message = "Unknown Error";
+    var message = Rez.Strings.Error_Unknown;
 
     if (error instanceof Error) {
       message = error.toShortString();
