@@ -7,6 +7,7 @@ using Hass;
 class HassControlApp extends App.AppBase {
   static const SCENES_VIEW = "scenes";
   static const ENTITIES_VIEW = "entities";
+  static const ENTITIES_SCENES_VIEW = "entities_scenes";
   static const STORAGE_KEY_START_VIEW = "start_view";
 
   var viewController;
@@ -32,6 +33,9 @@ class HassControlApp extends App.AppBase {
     }
     if (initialView.equals(HassControlApp.SCENES_VIEW)) {
       return viewController.pushSceneView();
+    }
+    if (initialView.equals(HassControlApp.ENTITIES_SCENES_VIEW)) {
+      return viewController.pushEntityScenesView();
     }
 
     return viewController.pushSceneView();
@@ -72,6 +76,9 @@ class HassControlApp extends App.AppBase {
       return HassControlApp.SCENES_VIEW;
     } else if (startView != null && startView.equals(HassControlApp.ENTITIES_VIEW)) {
       return HassControlApp.ENTITIES_VIEW;
+    } else if (startView != null &&
+               startView.equals(HassControlApp.ENTITIES_SCENES_VIEW)) {
+      return HassControlApp.ENTITIES_SCENES_VIEW;
     }
 
     return HassControlApp.ENTITIES_VIEW;
@@ -87,6 +94,11 @@ class HassControlApp extends App.AppBase {
       App.Storage.setValue(
         HassControlApp.STORAGE_KEY_START_VIEW,
         HassControlApp.SCENES_VIEW
+      );
+    } else if (newStartView.equals(HassControlApp.ENTITIES_SCENES_VIEW)) {
+      App.Storage.setValue(
+        HassControlApp.STORAGE_KEY_START_VIEW,
+        HassControlApp.ENTITIES_SCENES_VIEW
       );
     } else {
       throw new Toybox.Lang.InvalidValueException();
@@ -135,6 +147,11 @@ class HassControlApp extends App.AppBase {
         }
         if (initialView.equals(HassControlApp.SCENES_VIEW)) {
           var sceneView = viewController.getSceneView();
+          view = sceneView[0];
+          delegate = sceneView[1];
+        }
+        if (initialView.equals(HassControlApp.ENTITIES_SCENES_VIEW)) {
+          var sceneView = viewController.getEntitySceneView();
           view = sceneView[0];
           delegate = sceneView[1];
         }
