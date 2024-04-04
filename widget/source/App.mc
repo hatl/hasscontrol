@@ -7,6 +7,7 @@ using Hass;
 class HassControlApp extends App.AppBase {
   static const SCENES_VIEW = "scenes";
   static const ENTITIES_VIEW = "entities";
+  static const ENTITIES_SCENES_VIEW = "entities_scenes";
   static const STORAGE_KEY_START_VIEW = "start_view";
 
   var viewController;

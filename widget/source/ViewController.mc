@@ -37,6 +37,28 @@ class ViewController {
     return _loaderActive != null && !_errorView.isActive() && !_loginView.isActive();
   }
 
+  function getEntitySceneView() 
+  {
+    var controller = new EntityListController(
+      [
+        Hass.TYPE_SCENE,
+        Hass.TYPE_LIGHT,
+        Hass.TYPE_SWITCH,
+        Hass.TYPE_AUTOMATION,
+        Hass.TYPE_SCRIPT,
+        Hass.TYPE_LOCK,
+        Hass.TYPE_COVER,
+        Hass.TYPE_BINARY_SENSOR,
+        Hass.TYPE_INPUT_BOOLEAN
+      ]
+    );
+
+    return [
+      new EntityListView(controller),
+      new EntityListDelegate(controller)
+    ];
+  }
+
   function getSceneView() {
     var controller = new EntityListController(
       [Hass.TYPE_SCENE]
@@ -94,6 +116,16 @@ class ViewController {
 
   function pushEntityView() {
     var view = getEntityView();
+
+    Ui.pushView(
+      view[0],
+      view[1],
+      Ui.SLIDE_IMMEDIATE
+    );
+  }
+
+  function pushEntityScenesView() {
+    var view = getEntitySceneView();
 
     Ui.pushView(
       view[0],

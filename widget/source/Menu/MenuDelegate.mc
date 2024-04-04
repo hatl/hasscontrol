@@ -65,6 +65,15 @@ class MenuDelegate extends Ui.Menu2InputDelegate {
             App.getApp().menu.showSettingsMenu();
             return true;
         }
+        if (itemId == MenuController.MENU_SELECT_START_VIEW_ENTITIES_SCENES) {
+            App.getApp().setStartView(HassControlApp.ENTITIES_SCENES_VIEW);
+
+            // TOTO: This is a dirty hack to get the parent menu to re render
+            Ui.popView(Ui.SLIDE_IMMEDIATE);
+            Ui.popView(Ui.SLIDE_IMMEDIATE);
+            App.getApp().menu.showSettingsMenu();
+            return true;
+        }
 
         /*
          * GLOBAL MENU OPTIONS

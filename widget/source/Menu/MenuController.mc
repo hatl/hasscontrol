@@ -15,6 +15,7 @@ class MenuController {
 
         MENU_SELECT_START_VIEW_ENTITIES,
         MENU_SELECT_START_VIEW_SCENES,
+        MENU_SELECT_START_VIEW_ENTITIES_SCENES,
 
         MENU_BACK
     }
@@ -96,6 +97,7 @@ class MenuController {
         var currentStartView = App.getApp().getStartView();
         var entitiesSubtitle = "";
         var scenesSubtitle = "";
+        var entitiesScenesSubtitle = "";
 
         if (currentStartView == HassControlApp.ENTITIES_VIEW) {
             entitiesSubtitle = "selected";
@@ -103,6 +105,10 @@ class MenuController {
 
         if (currentStartView == HassControlApp.SCENES_VIEW) {
             scenesSubtitle = "selected";
+        }
+
+        if (currentStartView == HassControlApp.ENTITIES_SCENES_VIEW) {
+            entitiesScenesSubtitle = "selected";
         }
 
         menu.addItem(new Ui.MenuItem(
@@ -119,7 +125,14 @@ class MenuController {
             {}
         ));
 
-        menu.addItem(new Ui.MenuItem(
+         menu.addItem(new Ui.MenuItem(
+            "Entities and Scenes",
+            entitiesScenesSubtitle,
+            MenuController.MENU_SELECT_START_VIEW_ENTITIES_SCENES,
+            {}
+        ));
+
+         menu.addItem(new Ui.MenuItem(
             "Back",
             "",
             MenuController.MENU_BACK,
