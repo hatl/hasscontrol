@@ -27,10 +27,10 @@ module Hass {
       if (HASS_STATE_UNLOCKED.equals(stateInText)) {
         return STATE_UNLOCKED;
       }
-      if (HASS_STATE_OPEN.equals(stateInText)) {
+      if (HASS_STATE_OPEN.equals(stateInText) || HASS_STATE_OPENING.equals(stateInText)) {
         return STATE_OPEN;
       }
-      if (HASS_STATE_CLOSED.equals(stateInText)) {
+      if (HASS_STATE_CLOSED.equals(stateInText) || HASS_STATE_CLOSING.equals(stateInText)) {
         return STATE_CLOSED;
       }
 
