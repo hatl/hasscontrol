@@ -142,10 +142,18 @@ module Hass {
                 serviceAction = "turn_off";
                 newState = "off";
             } else if (action == Client.ENTITY_ACTION_CLOSE) {
-                serviceAction = "close";
+                if (entityType == "cover") {
+                    serviceAction = "close_cover";
+                } else {
+                    serviceAction = "close";
+                }
                 newState = "closed";
             } else if (action == Client.ENTITY_ACTION_OPEN) {
-                serviceAction = "open";
+                if (entityType == "cover") {
+                    serviceAction = "open_cover";
+                } else {
+                    serviceAction = "open";
+                }
                 newState = "open";
             } else if (action == Client.ENTITY_ACTION_LOCK) {
                 serviceAction = "lock";
