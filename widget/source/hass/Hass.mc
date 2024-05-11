@@ -345,12 +345,20 @@ module Hass {
         action = Client.ENTITY_ACTION_UNLOCK;
         loadingText = "Unlocking";
       }
-    } else if (entity.getType() == Entity.TYPE_COVER || entity.getType() == Entity.TYPE_VALVE) {
+    } else if (entity.getType() == Entity.TYPE_VALVE) {
       if (currentState == Entity.STATE_OPEN) {
         action = Client.ENTITY_ACTION_CLOSE;
         loadingText = "Closing";
       } else if (currentState == Entity.STATE_CLOSED) {
         action = Client.ENTITY_ACTION_OPEN;
+        loadingText = "Opening";
+      }
+    } else if (entity.getType() == Entity.TYPE_COVER) {
+      if (currentState == Entity.STATE_OPEN) {
+        action = Client.ENTITY_ACTION_COVER_CLOSE;
+        loadingText = "Closing";
+      } else if (currentState == Entity.STATE_CLOSED) {
+        action = Client.ENTITY_ACTION_COVER_OPEN;
         loadingText = "Opening";
       }
     } else if (entity.getType() == Entity.TYPE_BUTTON || entity.getType() == Entity.TYPE_INPUT_BUTTON) {
