@@ -191,7 +191,7 @@ module Hass {
                     "state" => state,
                     "attributes" => {
                         "unit_of_measurement" => "%",
-                        "device_class" => "battery"
+                        "device_class" => "battery",
                         "state_class" => "measurement"
                     }
                 },
