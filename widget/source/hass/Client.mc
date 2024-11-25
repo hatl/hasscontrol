@@ -192,6 +192,7 @@ module Hass {
                     "attributes" => {
                         "unit_of_measurement" => "%",
                         "device_class" => "battery"
+                        "state_class" => "measurement"
                     }
                 },
                 {
