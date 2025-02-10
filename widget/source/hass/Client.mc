@@ -37,7 +37,7 @@ module Hass {
         }
 
         function refreshBaseUrl() {
-            var newUrl = App.Properties.getValue("host");
+            var newUrl = App.Properties.getValue("host").trim();
             var chars = newUrl.toCharArray();
 
             if (chars.size() < 8) {
