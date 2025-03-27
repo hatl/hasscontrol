@@ -248,8 +248,12 @@ class EntityListView extends Ui.View {
     } else if (type == Hass.TYPE_COVER || type == Hass.TYPE_VALVE) {
         if (state == Hass.STATE_OPEN) {
             drawable = WatchUi.loadResource(Rez.Drawables.CoverOpen);
+        } else if (state == Hass.STATE_OPENING) {
+            drawable = WatchUi.loadResource(Rez.Drawables.CoverOpening);
         } else if (state == Hass.STATE_CLOSED) {
             drawable = WatchUi.loadResource(Rez.Drawables.CoverClosed);
+        } else if (state == Hass.STATE_CLOSING) {
+            drawable = WatchUi.loadResource(Rez.Drawables.CoverClosing);
         }
     } else if (type == Hass.TYPE_FAN) {
         if (state == Hass.STATE_ON) {

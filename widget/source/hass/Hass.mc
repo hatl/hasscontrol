@@ -1,6 +1,7 @@
 using Toybox.Application as App;
 using Toybox.WatchUi as Ui;
 using Toybox.System;
+using Toybox.Timer;
 
 using Utils;
 
@@ -10,7 +11,9 @@ module Hass {
   var client = null;
   var _entities = new [0];
   var _entitiesToRefresh = new [0];
+  var _transitionalEntities =  new [0];
   var _continueRefreshOnError = false;
+  var _refreshTimer = new Timer.Timer();
 
   function initClient() {
     client = new Client();
@@ -218,6 +221,11 @@ module Hass {
       return;
     }
 
+    if(noop != null && noop.isTransitional()){
+      _transitionalEntities.add(noop);
+      _refreshTimer.start(Utils.method(Hass, :_refreshTransitionalEntities), 2000, false);
+    }
+
     if (_entitiesToRefresh.size() > 0) {
       var entity = _entitiesToRefresh[0];
 
@@ -245,6 +253,12 @@ module Hass {
       _entitiesToRefresh.add(_entities[i]);
     }
 
+    _refreshPendingEntities(null, null);
+  }
+
+  function _refreshTransitionalEntities(){
+    _entitiesToRefresh.addAll(_transitionalEntities);
+    _transitionalEntities = new [0];
     _refreshPendingEntities(null, null);
   }
 
@@ -308,10 +322,9 @@ module Hass {
       return;
     }
 
-    if (data[:context][:state] != null) {
-      var entity = getEntity(data[:context][:entityId]);
-
-      if (entity != null) {
+    var entity = getEntity(data[:context][:entityId]);
+    if (entity != null) {
+      if (data[:context][:state] != null) {
         var newState = data[:context][:state];
 
         if (entity.getType() == Entity.TYPE_SCRIPT || entity.getType() == Entity.TYPE_BUTTON) {
@@ -322,6 +335,8 @@ module Hass {
 
         storeEntities();
         Ui.requestUpdate();
+      } else {
+        refreshEntity(entity, Utils.method(Hass, :_refreshPendingEntities));
       }
     }
 
@@ -364,13 +379,8 @@ module Hass {
         loadingText = "Opening";
       }
     } else if (entity.getType() == Entity.TYPE_COVER) {
-      if (currentState == Entity.STATE_OPEN) {
-        action = Client.ENTITY_ACTION_COVER_CLOSE;
-        loadingText = "Closing";
-      } else if (currentState == Entity.STATE_CLOSED) {
-        action = Client.ENTITY_ACTION_COVER_OPEN;
-        loadingText = "Opening";
-      }
+      action = Client.ENTITY_ACTION_COVER_TOGGLE;
+      loadingText = "Toggling";
     } else if (entity.getType() == Entity.TYPE_BUTTON || entity.getType() == Entity.TYPE_INPUT_BUTTON) {
       action = Client.ENTITY_ACTION_PRESS;
       loadingText = "Pressing";

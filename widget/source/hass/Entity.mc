@@ -27,11 +27,17 @@ module Hass {
       if (HASS_STATE_UNLOCKED.equals(stateInText)) {
         return STATE_UNLOCKED;
       }
-      if (HASS_STATE_OPEN.equals(stateInText) || HASS_STATE_OPENING.equals(stateInText)) {
+      if (HASS_STATE_OPEN.equals(stateInText)) {
         return STATE_OPEN;
       }
-      if (HASS_STATE_CLOSED.equals(stateInText) || HASS_STATE_CLOSING.equals(stateInText)) {
+      if (HASS_STATE_OPENING.equals(stateInText)) {
+        return STATE_OPENING;
+      }
+      if (HASS_STATE_CLOSED.equals(stateInText)) {
         return STATE_CLOSED;
+      }
+      if (HASS_STATE_CLOSING.equals(stateInText)) {
+        return STATE_CLOSING;
       }
 
       return STATE_UNKNOWN;
@@ -47,8 +53,14 @@ module Hass {
       if (state == STATE_OPEN) {
         return HASS_STATE_OPEN;
       }
+      if (state == STATE_OPENING) {
+        return HASS_STATE_OPENING;
+      }
       if (state == STATE_CLOSED) {
         return HASS_STATE_CLOSED;
+      }
+      if (state == STATE_CLOSING) {
+        return HASS_STATE_CLOSING;
       }
       if (state == STATE_LOCKED) {
         return HASS_STATE_LOCKED;
@@ -151,7 +163,9 @@ module Hass {
         && newState != STATE_LOCKED
         && newState != STATE_UNLOCKED
         && newState != STATE_CLOSED
+        && newState != STATE_CLOSING
         && newState != STATE_OPEN
+        && newState != STATE_OPENING
         && newState != STATE_SENSOR
         && newState != STATE_UNKNOWN
       ) {
@@ -176,6 +190,10 @@ module Hass {
 
     function isExternal() {
       return _mExt;
+    }
+
+    function isTransitional() {
+      return _mState == STATE_CLOSING || _mState == STATE_OPENING;
     }
 
     function setExternal(isExternal) {

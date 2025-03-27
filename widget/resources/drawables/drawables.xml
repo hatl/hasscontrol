@@ -15,7 +15,9 @@
         <bitmap id="LockLocked" filename="lock_locked.png" />
         <bitmap id="LockUnlocked" filename="lock_unlocked.png" />
         <bitmap id="CoverClosed" filename="cover_closed.png" />
+        <bitmap id="CoverClosing" filename="cover_closing.png" />
         <bitmap id="CoverOpen" filename="cover_open.png" />
+        <bitmap id="CoverOpening" filename="cover_opening.png" />
         <bitmap id="FanOn" filename="fan_on.png" />
         <bitmap id="FanOff" filename="fan_off.png" />
         <bitmap id="BinaryOn" filename="binary_on.png" />

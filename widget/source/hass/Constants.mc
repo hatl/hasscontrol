@@ -35,7 +35,9 @@ module Hass {
         STATE_LOCKED,
         STATE_UNLOCKED,
         STATE_CLOSED,
+        STATE_CLOSING,
         STATE_OPEN,
+        STATE_OPENING,
         STATE_SENSOR,
         STATE_UNKNOWN
     }
