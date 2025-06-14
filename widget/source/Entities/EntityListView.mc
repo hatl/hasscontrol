@@ -347,19 +347,24 @@ class EntityListView extends Ui.View {
       dc.setColor(Graphics.COLOR_BLACK, Graphics.COLOR_BLACK);
       dc.fillRoundedRectangle(barX, activeSegmentY, barWidth, segmentHeight, 5);
     } else {
-      // Round screen page bar (original code)
+      // Round screen page bar
       var radius = cvh - 10;
       var attr = Graphics.ARC_COUNTER_CLOCKWISE;
-      var padding = 1;
       var topDegreeStart = 130;
       var bottomDegreeEnd = 230;
-      var barSize = ((bottomDegreeEnd - padding) - (topDegreeStart + padding)) / numEntities;
-      var barStart = (topDegreeStart + padding) + (barSize * currentIndex);
 
+      // Calculate the exact size of each segment to ensure we use the full arc
+      var barSize = (bottomDegreeEnd - topDegreeStart) / numEntities;
+
+      // Calculate the start position for the current indicator
+      var barStart = topDegreeStart + (barSize * currentIndex);
+
+      // Draw the background arc
       dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_BLACK);
       dc.setPenWidth(10);
       dc.drawArc(cvw, cvh, radius, attr, topDegreeStart, bottomDegreeEnd);
 
+      // Draw the current position indicator
       dc.setColor(Graphics.COLOR_BLACK, Graphics.COLOR_BLACK);
       dc.setPenWidth(6);
       dc.drawArc(cvw, cvh, radius, attr, barStart, barStart + barSize);
