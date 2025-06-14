@@ -10,4 +10,10 @@ class BaseDelegate extends Ui.BehaviorDelegate {
         App.getApp().launchInitialView();
         return true;
     }
+
+    function onHold(clickEvent) {
+        // Handle long press gesture to open menu
+        App.getApp().menu.showRootMenu();
+        return true;
+    }
 }

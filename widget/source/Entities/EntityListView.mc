@@ -86,6 +86,12 @@ class EntityListDelegate extends Ui.BehaviorDelegate {
     return true;
   }
 
+  function onHold(clickEvent) {
+    // Handle long press gesture to open menu
+    App.getApp().menu.showRootMenu();
+    return true;
+  }
+
   function onNextPage() {
     var index = _mController.getIndex();
     var count = _mController.getCount();
