@@ -19,6 +19,7 @@ Please read through the instructions below, I will try to guide you through the 
   - [Configuration](#configuration)
   - [Logging in](#logging-in)
   - [Group sync](#group-sync)
+  - [Navigation \& Controls](#navigation--controls)
   - [Header Authentication](#header-authentication)
   - [FAQ](#faq)
     - [Unknown error -300 - Self-Signed SSL Certificate](#unknown-error--300---self-signed-ssl-certificate)
@@ -118,7 +119,7 @@ To login, simply open the widget and trigger any scene. Shortly after, you will 
 
 You should now be able to trigger your scenes.
 
-If you don't have any scenes, you can login by hold the menu button on your watch and logging in from them widget menu.
+If you don't have any scenes, you can login by pressing and holding on the screen (long press) or using the menu button on your watch and logging in from the widget menu.
 
 If you don't see any login request on your phone. Restart the widget after you have opened the garmin Connect app and the watch has been connected.
 
@@ -144,10 +145,29 @@ group:
 
 Then write the id of the group you have just created (in our case `group.garmin`) into the ConnectIQ app widget settings as described [above](#configuration).
 
-Once you have added the group into ConnectIQ app widget settings, open the widget on your Garmin device and access the menu (on watches with touchscreen using the Press and Hold gesture). Then go into `Settings` and select `Refresh entities`.
+Once you have added the group into ConnectIQ app widget settings, open the widget on your Garmin device and access the menu (either by using a long press on the screen or pressing the menu button). Then go into `Settings` and select `Refresh entities`.
 Once that is done, all entities added to that group in Home Assistant and supported by HassControl will be imported and available on the watch.
 
 If you done some modification to the group in Home Assistant, you can at any time repeat this procedure to add, update or remove entities from your watch.
+
+### Navigation & Controls
+
+The widget is designed to be as simple as possible, but there are a few things to keep in mind.
+
+- **Scrolling**: Depending on your watch model, you can scroll through the widget using the touchscreen or the up/down buttons. If your watch has a touchscreen, you can also use the swipe gesture to scroll.
+- **Selecting an entity**: To select an entity, simply scroll to it and press the "Select" button (usually the middle button on the right side of the watch).
+- **Toggling a switch or light**: To toggle a switch or light, select the entity and press the "Select" button again. The entity should now be toggled on or off.
+- **Triggering a scene or script**: To trigger a scene or script, select the entity and press the "Select" button. The scene or script should now be executed.
+- **Refreshing entities**: If you have made changes to your entities in Home Assistant and want to update the widget, you can select the "Refresh entities" option in the widget menu. This will reload all entities from Home Assistant.
+
+HassControl also supports the following controls:
+
+- **Single tap/press**: Toggle the current entity (turn lights on/off, activate scenes, etc.)
+- **Menu button**: Open the menu
+- **Long press**: Open the menu (alternative to using the menu button)
+- **Swipe/Page buttons**: Navigate between entities
+
+On touchscreen devices, the long press gesture provides a convenient way to access the menu without using the physical menu button.
 
 ### Header Authentication
 
