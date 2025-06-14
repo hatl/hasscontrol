@@ -2,6 +2,7 @@ using Toybox.Application as App;
 using Toybox.WatchUi as Ui;
 using Toybox.Timer;
 using Hass;
+using Utils;
 
 class EntityListController {
   hidden var _mEntities;
@@ -40,7 +41,7 @@ class EntityListController {
 
   function setIndex(index) {
     if (!(index instanceof Number)) {
-      throw new Toybox.Lang.InvalidValueException();
+      throw new Toybox.Lang.InvalidValueException("Index must be a number");
     }
     _mIndex = index;
   }
@@ -151,11 +152,14 @@ class EntityListView extends Ui.View {
     var cvh = vh / 2;
     var cvw = vw / 2;
 
+    // Adjust sad smiley position for rectangular screens
+    var iconVertPosition = Utils.isRectangularScreen() ? 0.25 : 0.3;
+
     var SmileySad = Ui.loadResource(Rez.Drawables.SmileySad);
 
     dc.drawBitmap(
       cvw - (SmileySad.getHeight() / 2),
-      (vh * 0.3) - (SmileySad.getHeight() / 2),
+      (vh * iconVertPosition) - (SmileySad.getHeight() / 2),
       SmileySad
     );
 
@@ -163,8 +167,14 @@ class EntityListView extends Ui.View {
     var text = Ui.loadResource(Rez.Strings.NoEntities);
     text = Graphics.fitTextToArea(text, font, vw * 0.9, vh * 0.9, true);
 
-    dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_BLACK);
-    dc.drawText(cvh, cvw, font, text, Graphics.TEXT_JUSTIFY_CENTER);
+    // Adjust text position for rectangular screens
+    if (Utils.isRectangularScreen()) {
+      dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_BLACK);
+      dc.drawText(vh * 0.65, cvw, font, text, Graphics.TEXT_JUSTIFY_CENTER);
+    } else {
+      dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_BLACK);
+      dc.drawText(cvh, cvw, font, text, Graphics.TEXT_JUSTIFY_CENTER);
+    }
   }
 
   function drawEntityText(dc, entity) {
@@ -194,7 +204,12 @@ class EntityListView extends Ui.View {
         }
     }
 
-    dc.drawText(cvh, cvw * 1.1, font, text, Graphics.TEXT_JUSTIFY_CENTER);
+    // Adjust text position for rectangular screens
+    if (Utils.isRectangularScreen()) {
+      dc.drawText(cvh, cvw, font, text, Graphics.TEXT_JUSTIFY_CENTER);
+    } else {
+      dc.drawText(cvh, cvw * 1.1, font, text, Graphics.TEXT_JUSTIFY_CENTER);
+    }
   }
 
   function drawIcon(dc, entity) {
@@ -202,6 +217,9 @@ class EntityListView extends Ui.View {
     var vw = dc.getWidth();
 
     var cvw = vw / 2;
+
+    // Adjust icon position for rectangular screens
+    var iconVertPosition = Utils.isRectangularScreen() ? 0.25 : 0.3;
 
     var drawable = null;
 
@@ -295,7 +313,7 @@ class EntityListView extends Ui.View {
 
     dc.drawBitmap(
       cvw - (drawable.getHeight() / 2),
-      (vh * 0.3) - (drawable.getHeight() / 2),
+      (vh * iconVertPosition) - (drawable.getHeight() / 2),
       drawable
     );
   }
@@ -310,25 +328,42 @@ class EntityListView extends Ui.View {
     var cvh = vh / 2;
     var cvw = vw / 2;
 
-    var radius = cvh - 10;
+    if (Utils.isRectangularScreen()) {
+      // Rectangular screen page bar on the left side
+      var barWidth = 10;
+      var barHeight = vh * 0.7;
+      var barX = 15;
+      var barY = (vh - barHeight) / 2;
 
-    var attr = Graphics.ARC_COUNTER_CLOCKWISE;
+      // Draw background bar
+      dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_BLACK);
+      dc.fillRoundedRectangle(barX, barY, barWidth, barHeight, 5);
 
-    var padding = 1;
-    var topDegreeStart = 130;
-    var bottomDegreeEnd = 230;
+      // Calculate the active segment height and position
+      var segmentHeight = barHeight / numEntities;
+      var activeSegmentY = barY + (segmentHeight * currentIndex);
 
-    var barSize = ((bottomDegreeEnd - padding) - (topDegreeStart + padding)) / numEntities;
+      // Draw active segment
+      dc.setColor(Graphics.COLOR_BLACK, Graphics.COLOR_BLACK);
+      dc.fillRoundedRectangle(barX, activeSegmentY, barWidth, segmentHeight, 5);
+    } else {
+      // Round screen page bar (original code)
+      var radius = cvh - 10;
+      var attr = Graphics.ARC_COUNTER_CLOCKWISE;
+      var padding = 1;
+      var topDegreeStart = 130;
+      var bottomDegreeEnd = 230;
+      var barSize = ((bottomDegreeEnd - padding) - (topDegreeStart + padding)) / numEntities;
+      var barStart = (topDegreeStart + padding) + (barSize * currentIndex);
 
-    var barStart = (topDegreeStart + padding) + (barSize * currentIndex);
+      dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_BLACK);
+      dc.setPenWidth(10);
+      dc.drawArc(cvw, cvh, radius, attr, topDegreeStart, bottomDegreeEnd);
 
-    dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_BLACK);
-    dc.setPenWidth(10);
-    dc.drawArc(cvw, cvh, radius, attr, topDegreeStart, bottomDegreeEnd);
-
-    dc.setColor(Graphics.COLOR_BLACK, Graphics.COLOR_BLACK);
-    dc.setPenWidth(6);
-    dc.drawArc(cvw, cvh, radius, attr, barStart, barStart + barSize);
+      dc.setColor(Graphics.COLOR_BLACK, Graphics.COLOR_BLACK);
+      dc.setPenWidth(6);
+      dc.drawArc(cvw, cvh, radius, attr, barStart, barStart + barSize);
+    }
   }
 
   function onTimerDone() {

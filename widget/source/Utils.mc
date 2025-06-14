@@ -1,6 +1,7 @@
 using Toybox.Application as App;
 using Toybox.StringUtil;
 using Toybox.Lang;
+using Toybox.System;
 
 module Utils {
   function getScenesFromSettings() {
@@ -86,5 +87,14 @@ module Utils {
 
   function method(Scope, symbol) {
     return new Lang.Method(Scope, symbol);
+  }
+
+  (:glance)
+  function isRectangularScreen() {
+    var deviceSettings = System.getDeviceSettings();
+    if (deviceSettings has :screenShape) {
+      return deviceSettings.screenShape == System.SCREEN_SHAPE_RECTANGLE;
+    }
+    return false;
   }
 }
