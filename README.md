@@ -17,6 +17,10 @@ Please read through the instructions below, I will try to guide you through the 
   - [Supported entity types](#supported-entity-types)
   - [Installation](#installation)
   - [Configuration](#configuration)
+    - [Basic Settings](#basic-settings)
+    - [Entity Synchronization](#entity-synchronization)
+    - [Battery and Performance](#battery-and-performance)
+    - [Authentication Options](#authentication-options)
   - [Logging in](#logging-in)
   - [Group sync](#group-sync)
   - [Navigation \& Controls](#navigation--controls)
@@ -67,9 +71,13 @@ Once you have the app installed on your paired phone you can browse for widget a
 Open the widget settings in the ConnectIQ app.
 [How to Access the Settings of a Connect IQ App Using the Garmin Connect App](https://support.garmin.com/en-US/?faq=SPo0TFvhQO04O36Y5TYRh5)
 
+#### Basic Settings
+
 **Host**: This should be the url to the Home Assistant instance you would like to control. Remember only https url is supported by Garmin.
 
 **Long-Lived access token**: If you prefer generating an access token in Home Assistant instead of login in thru the garmin app you can paste your token here.
+
+#### Entity Synchronization
 
 **Scenes**: Since scene names aren't that configurable in Home Assistant you can override the names in this box. Multiple overrides can be specified by separating them with a comma (,).
 
@@ -83,9 +91,13 @@ I will describe this procedure in more detail below.
 
 ***Note:*** *The default start view is filtered to scenes and will not show light, switches etc., the start view can be changed in the widget settings in your Garmin device.*
 
-**Battery percentage reporting**
+#### Battery and Performance
 
-Configure an arbitrary entity name (a-z, 0-9, _) to which the battery status of the watch should be reported.
+**Refresh on show**: When enabled, the widget will refresh entity states every time it's opened. This provides more up-to-date information but uses more battery and network resources.
+
+**Close after action**: When enabled, the widget will automatically close after successfully controlling an entity (turning a light on/off, activating a scene, etc.). This can save battery but requires reopening the widget for additional actions.
+
+**Battery percentage reporting**: Configure an arbitrary entity name (a-z, 0-9, _) to which the battery status of the watch should be reported.
 e.g., "venu2_battery" (**excluding** the "sensor." prefix)
 The battery value is being sent to Home Assistant once - when the app is started.
 The corresponding entity is created automatically (e.g., "sensor.venu2_battery").
@@ -103,6 +115,10 @@ The corresponding entity is created automatically (e.g., "sensor.venu2_battery")
 ```
 Then enter the corresponding entity name in the ConnectIQ app settings (excluding the "sensor." prefix)
 e.g., "my_garmin_device"
+
+#### Authentication Options
+
+**Additional HTTP(S) Header - Key/Value**: These two fields allow you to specify a custom HTTP header to be added to all requests from the widget to Home Assistant. This can be used for additional authentication or for passing custom information to proxy servers. See the [Header Authentication](#header-authentication) section for more details.
 
 ### Logging in
 Once you have configured all settings in the ConnectIQ app, the next step will be to login.
