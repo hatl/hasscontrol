@@ -176,7 +176,7 @@ class EntityListView extends Ui.View {
     // Adjust text position for rectangular screens
     if (Utils.isRectangularScreen()) {
       dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_BLACK);
-      dc.drawText(vh * 0.65, cvw, font, text, Graphics.TEXT_JUSTIFY_CENTER);
+      dc.drawText(cvw, vh * 0.4, font, text, Graphics.TEXT_JUSTIFY_CENTER);
     } else {
       dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_BLACK);
       dc.drawText(cvh, cvw, font, text, Graphics.TEXT_JUSTIFY_CENTER);
@@ -212,7 +212,7 @@ class EntityListView extends Ui.View {
 
     // Adjust text position for rectangular screens
     if (Utils.isRectangularScreen()) {
-      dc.drawText(cvh, cvw, font, text, Graphics.TEXT_JUSTIFY_CENTER);
+      dc.drawText( cvw, cvh, font, text, Graphics.TEXT_JUSTIFY_CENTER);
     } else {
       dc.drawText(cvh, cvw * 1.1, font, text, Graphics.TEXT_JUSTIFY_CENTER);
     }
