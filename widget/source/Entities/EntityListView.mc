@@ -179,7 +179,7 @@ class EntityListView extends Ui.View {
       dc.drawText(cvw, vh * 0.4, font, text, Graphics.TEXT_JUSTIFY_CENTER);
     } else {
       dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_BLACK);
-      dc.drawText(cvh, cvw, font, text, Graphics.TEXT_JUSTIFY_CENTER);
+      dc.drawText(cvw, cvh, font, text, Graphics.TEXT_JUSTIFY_CENTER);
     }
   }
 
