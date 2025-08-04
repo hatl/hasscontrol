@@ -177,6 +177,8 @@ module Hass {
 
     var entity = getEntity(data[:body]["entity_id"]);
 
+    entity.setRefreshing(false);
+
     if (name != null) {
       entity.setName(name);
     }
@@ -190,6 +192,9 @@ module Hass {
     if (sensorClass != null) {
       entity.setSensorClass(sensorClass);
     }
+
+    System.println("Updating after" + name);
+    Ui.requestUpdate();
 
     if (data[:context][:callback] != null) {
       data[:context][:callback].invoke(null, entity);
@@ -252,6 +257,7 @@ module Hass {
 
     for (var i = 0; i < _entities.size(); i++) {
       _entitiesToRefresh.add(_entities[i]);
+      _entities[i].setRefreshing(true);
     }
 
     _refreshPendingEntities(null, null);
