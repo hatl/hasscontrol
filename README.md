@@ -144,7 +144,7 @@ If you are having problems logging in or if the widget is logged out frequently,
 
 ### Group sync
 Due to the limitations of the watch, there is no really good way of listing and adding entities directly from the watch.
-But the easiest way to add your entities is by [creating a new group](https://www.home-assistant.io/integrations/group/) in Home Assistant, and add all your entities there.
+But the easiest way to add your entities is by [creating a new group](https://www.home-assistant.io/integrations/group/#old-style-groups) in Home Assistant, and add all your entities there. **Note that "old style groups" MUST be used, and cannot be edited with the "groups" UI.**
 
 Your group configuration can look like this:
 ```
@@ -156,6 +156,16 @@ group:
       - light.bathroom
       - switch.tv
       - script.turn_lights_for_10_min
+```
+Or if your `configuration.yaml` looks like `group: !include groups.yaml`, omit the leading `group:`
+```
+# Example groups.yaml entry
+garmin:
+  name: Garmin
+  entities:
+    - light.bathroom
+    - switch.tv
+    - script.turn_lights_for_10_min
 ```
 ***Note***: *Remember after changing the configuration, you have to either reload the groups or restart the Home Assistant.*
 
