@@ -194,6 +194,10 @@ class EntityListView extends Ui.View {
     var fontWidth = vw * 0.80;
 
     var text = entity.getName();
+    var sensorValue = entity.getSensorValue();
+    if (sensorValue) {
+      text += "\n" + entity.getSensorValue();
+    }
 
     var fonts = [Graphics.FONT_MEDIUM, Graphics.FONT_TINY, Graphics.FONT_XTINY];
     var font = fonts[0];

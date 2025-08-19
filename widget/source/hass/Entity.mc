@@ -88,6 +88,30 @@ module Hass {
       return HASS_STATE_UNKNOWN;
     }
 
+    // Converts any state to a boolean value. For example, if a light is on, it is considered true, while off is false.
+    static function stateToActive(state) {
+      if (state == STATE_ON) {
+        return true;
+      }
+      if (state == STATE_OFF) {
+        return false;
+      }
+      if (state == STATE_OPEN) {
+        return true;
+      }
+      if (state == STATE_CLOSED) {
+        return false;
+      }
+      if (state == STATE_UNLOCKED) {
+        return true;
+      }
+      if (state == STATE_LOCKED) {
+        return false;
+      }
+
+      return true;
+    }
+
     hidden var _mId; // Home assistant id
     hidden var _mType; // Type of entity
     hidden var _mName; // Name
@@ -95,6 +119,7 @@ module Hass {
     hidden var _mExt; // Is this entity loaded from settings?
     hidden var _mSensorValue; // Custom state info text
     hidden var _mSensorClass; // Device class for sensor
+    hidden var _mRefreshing; // If device state is currently refreshing
 
     function initialize(entity) {
       _mId = entity[:id];
@@ -102,6 +127,7 @@ module Hass {
       _mState = Entity.stringToState(entity[:state]);
       _mExt = entity[:ext] == true;
       _mSensorClass = entity[:sensorClass];
+      _mRefreshing = false;
 
       if (_mId.find("scene.") != null) {
         _mType = TYPE_SCENE;
@@ -140,17 +166,24 @@ module Hass {
       return _mId;
     }
 
+    function getRefreshing() {
+      return _mRefreshing;
+    }
+
+    function setRefreshing(newRefreshingState) {
+      _mRefreshing = newRefreshingState;
+    }
+
     function getName() {
-      if (_mState == STATE_SENSOR) {
-        return _mName + "\n" + _mSensorValue;
-      }
-      else {
-        return _mName;
-      }
+      return _mName;
     }
 
     function setName(newName) {
       _mName = newName;
+    }
+
+    function getSensorValue() {
+      return _mSensorValue;
     }
 
     function getType() {
