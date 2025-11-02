@@ -31,5 +31,8 @@
         <bitmap id="Humidity" filename="humidity.png" />
         <bitmap id="CO2" filename="co2.png" />
         <bitmap id="AirPM" filename="molecule.png" />
+        <bitmap id="EnergyMeter" filename="energy_meter.png" />
+        <bitmap id="WaterMeter" filename="water_meter.png" />
+        <bitmap id="GasMeter" filename="gas_meter.png" />
     </drawables>
 </resources>
