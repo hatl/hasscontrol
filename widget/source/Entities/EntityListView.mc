@@ -24,7 +24,10 @@ class EntityListController {
       _mEntities = Hass.getEntities();
     }
 
-    if (_mIndex >= _mEntities.size()) {
+    // Ensure index is within valid bounds
+    if (_mEntities.size() == 0) {
+      _mIndex = 0;
+    } else if (_mIndex >= _mEntities.size()) {
       _mIndex = _mEntities.size() - 1;
     } else if (_mIndex < 0) {
       _mIndex = 0;
@@ -96,6 +99,10 @@ class EntityListDelegate extends Ui.BehaviorDelegate {
     var index = _mController.getIndex();
     var count = _mController.getCount();
 
+    if (count == 0) {
+      return true;
+    }
+
     index += 1;
 
     if (index > count - 1) {
@@ -111,6 +118,10 @@ class EntityListDelegate extends Ui.BehaviorDelegate {
   function onPreviousPage() {
     var index = _mController.getIndex();
     var count = _mController.getCount();
+
+    if (count == 0) {
+      return true;
+    }
 
     index -= 1;
 

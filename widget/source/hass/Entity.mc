@@ -183,7 +183,7 @@ module Hass {
         && newState != STATE_SENSOR
         && newState != STATE_UNKNOWN
       ) {
-        throw new Toybox.Lang.InvalidValueException("state must be a valid Entity state");
+        throw new Toybox.Lang.InvalidValueException("Invalid entity state value");
       }
 
       _mState = newState;

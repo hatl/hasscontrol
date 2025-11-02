@@ -24,7 +24,7 @@ class Error {
             return;
         }
 
-        code = OAuthError.ERROR_UNKNOWN;
+        code = Error.ERROR_UNKNOWN;
         message = Rez.Strings.Error_Unknown;
         context = null;
     }

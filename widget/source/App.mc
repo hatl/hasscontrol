@@ -101,7 +101,7 @@ class HassControlApp extends App.AppBase {
         HassControlApp.ENTITIES_SCENES_VIEW
       );
     } else {
-      throw new Toybox.Lang.InvalidValueException();
+      throw new Toybox.Lang.InvalidValueException("Invalid start view value");
     }
   }
 
