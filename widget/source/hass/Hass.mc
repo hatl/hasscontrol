@@ -160,7 +160,7 @@ module Hass {
       if (data[:body]["attributes"]["device_class"] != null) {
         sensorClassStr = data[:body]["attributes"]["device_class"];
         if (sensorClassStr.find("temperature") != null) {
-          sensorClass = SENSOR_TEMPERATUE;
+          sensorClass = SENSOR_TEMPERATURE;
         } else if (sensorClassStr.find("humidity") != null) {
           sensorClass = SENSOR_HUMIDITY;
         } else if (sensorClassStr.find("carbon_dioxide") != null) {

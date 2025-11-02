@@ -311,7 +311,7 @@ class EntityListView extends Ui.View {
     } else if (type == Hass.TYPE_SCENE) {
       drawable = WatchUi.loadResource(Rez.Drawables.Scene);
     } else if (type == Hass.TYPE_SENSOR) {
-      if (sensorClass == Hass.SENSOR_TEMPERATUE) {
+      if (sensorClass == Hass.SENSOR_TEMPERATURE) {
         drawable = WatchUi.loadResource(Rez.Drawables.Temperature);
       } else if (sensorClass == Hass.SENSOR_HUMIDITY) {
         drawable = WatchUi.loadResource(Rez.Drawables.Humidity);

@@ -55,7 +55,7 @@ module Hass {
     }
 
     enum {
-        SENSOR_TEMPERATUE,
+        SENSOR_TEMPERATURE,
         SENSOR_HUMIDITY,
         SENSOR_CO2,
         SENSOR_PM,
