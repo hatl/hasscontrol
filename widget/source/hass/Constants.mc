@@ -59,6 +59,9 @@ module Hass {
         SENSOR_HUMIDITY,
         SENSOR_CO2,
         SENSOR_PM,
+        SENSOR_ENERGY,
+        SENSOR_GAS,
+        SENSOR_WATER,
         SENSOR_OTHER
     }
 }

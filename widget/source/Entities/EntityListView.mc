@@ -308,6 +308,12 @@ class EntityListView extends Ui.View {
         drawable = WatchUi.loadResource(Rez.Drawables.CO2);
       } else if (sensorClass == Hass.SENSOR_PM) {
         drawable = WatchUi.loadResource(Rez.Drawables.AirPM);
+      } else if (sensorClass == Hass.SENSOR_ENERGY) {
+        drawable = WatchUi.loadResource(Rez.Drawables.EnergyMeter);
+      } else if (sensorClass == Hass.SENSOR_WATER) {
+        drawable = WatchUi.loadResource(Rez.Drawables.WaterMeter);
+      } else if (sensorClass == Hass.SENSOR_GAS) {
+        drawable = WatchUi.loadResource(Rez.Drawables.GasMeter);
       } else if (sensorClass == Hass.SENSOR_OTHER) {
         drawable = WatchUi.loadResource(Rez.Drawables.Unknown);
       }

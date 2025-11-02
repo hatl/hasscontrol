@@ -169,6 +169,12 @@ module Hass {
           sensorClass = SENSOR_PM;
         } else if (sensorClassStr.find("pm10") != null) {
           sensorClass = SENSOR_PM;
+        } else if (sensorClassStr.find("energy") != null) {
+          sensorClass = SENSOR_ENERGY;
+        } else if (sensorClassStr.find("water") != null) {
+          sensorClass = SENSOR_WATER;
+        } else if (sensorClassStr.find("gas") != null) {
+          sensorClass = SENSOR_GAS;
         }
       } else {
         sensorClass = SENSOR_OTHER;
