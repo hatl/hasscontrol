@@ -23,6 +23,10 @@ module Hass {
   function getGroup() {
     var group = App.Properties.getValue("group");
 
+    if (group == null || group.length() == 0) {
+      return null;
+    }
+
     if (group.find(".") == null) {
       group = "group." + group;
     }
@@ -135,10 +139,30 @@ module Hass {
 
   function _onReceiveEntity(err, data) {
     if (err != null) {
-      if (data != null && data[:context][:callback] != null) {
+      if (data != null && data[:context] != null && data[:context][:callback] != null) {
         data[:context][:callback].invoke(err, null);
       } else {
         App.getApp().viewController.showError(err);
+      }
+      return;
+    }
+
+    // Validate data structure before proceeding
+    if (data == null || data[:body] == null || data[:body]["entity_id"] == null) {
+      System.println("Invalid entity data received");
+      if (data != null && data[:context] != null && data[:context][:callback] != null) {
+        data[:context][:callback].invoke(new Error(Error.ERROR_UNKNOWN), null);
+      }
+      return;
+    }
+
+    var entity = getEntity(data[:body]["entity_id"]);
+    
+    // If entity doesn't exist, skip processing
+    if (entity == null) {
+      System.println("Entity not found: " + data[:body]["entity_id"]);
+      if (data[:context] != null && data[:context][:callback] != null) {
+        data[:context][:callback].invoke(null, null);
       }
       return;
     }
@@ -148,15 +172,15 @@ module Hass {
     var sensorClass = null;
     var sensorClassStr = null;
 
-    if (data != null && data[:body] != null) {
-      if (data[:body]["attributes"] != null) {
-        name = data[:body]["attributes"]["friendly_name"];
-      }
+    if (data[:body]["attributes"] != null) {
+      name = data[:body]["attributes"]["friendly_name"];
+      
       if (data[:body]["attributes"]["unit_of_measurement"] != null) {
         state = data[:body]["state"] + data[:body]["attributes"]["unit_of_measurement"];
       } else {
         state = data[:body]["state"];
       }
+      
       if (data[:body]["attributes"]["device_class"] != null) {
         sensorClassStr = data[:body]["attributes"]["device_class"];
         if (sensorClassStr.find("temperature") != null) {
@@ -179,9 +203,10 @@ module Hass {
       } else {
         sensorClass = SENSOR_OTHER;
       }
+    } else {
+      state = data[:body]["state"];
+      sensorClass = SENSOR_OTHER;
     }
-
-    var entity = getEntity(data[:body]["entity_id"]);
 
     if (name != null) {
       entity.setName(name);
@@ -197,7 +222,7 @@ module Hass {
       entity.setSensorClass(sensorClass);
     }
 
-    if (data[:context][:callback] != null) {
+    if (data[:context] != null && data[:context][:callback] != null) {
       data[:context][:callback].invoke(null, entity);
     }
   }
@@ -238,7 +263,13 @@ module Hass {
 
       _entitiesToRefresh.remove(entity);
 
-      refreshEntity(entity, Utils.method(Hass, :_refreshPendingEntities));
+      // Add null check for entity before refreshing
+      if (entity != null) {
+        refreshEntity(entity, Utils.method(Hass, :_refreshPendingEntities));
+      } else {
+        // Skip null entity and continue with next
+        _refreshPendingEntities(null, null);
+      }
     } else {
       // We need to finalize with reading the scenes from settings again,
       // so that the name config takes precedence
@@ -270,33 +301,42 @@ module Hass {
   }
 
   function _onReceiveEntities(err, data) {
-    if (err == null) {
-      var entities = data[:body]["attributes"]["entity_id"];
-
-      _entities = new [0];
-
-      for (var i = 0; i < entities.size(); i++) {
-        var entity = getEntity(entities[i]);
-
-        if (entity == null) {
-          _entities.add(new Entity({
-            :id => entities[i],
-            :name => entities[i],
-            :state => null,
-            :sensorClass => null
-          }));
-        } else {
-          entity.setExternal(false);
-        }
-      }
-
-      loadScenesFromSettings();
-
-      refreshAllEntities(false);
-    } else {
+    if (err != null) {
       App.getApp().viewController.removeLoader();
       App.getApp().viewController.showError(err);
+      return;
     }
+
+    // Validate data structure
+    if (data == null || data[:body] == null || data[:body]["attributes"] == null || data[:body]["attributes"]["entity_id"] == null) {
+      System.println("Invalid entities data received");
+      App.getApp().viewController.removeLoader();
+      App.getApp().viewController.showError("Invalid\ngroup\nresponse");
+      return;
+    }
+
+    var entities = data[:body]["attributes"]["entity_id"];
+
+    _entities = new [0];
+
+    for (var i = 0; i < entities.size(); i++) {
+      var entity = getEntity(entities[i]);
+
+      if (entity == null) {
+        _entities.add(new Entity({
+          :id => entities[i],
+          :name => entities[i],
+          :state => null,
+          :sensorClass => null
+        }));
+      } else {
+        entity.setExternal(false);
+      }
+    }
+
+    loadScenesFromSettings();
+
+    refreshAllEntities(false);
   }
 
   function importEntities() {
@@ -326,6 +366,13 @@ module Hass {
     if (error != null) {
       App.getApp().viewController.removeLoaderImmediate();
       App.getApp().viewController.showError(error);
+      return;
+    }
+
+    // Validate data structure
+    if (data == null || data[:context] == null || data[:context][:entityId] == null) {
+      System.println("Invalid toggle entity response");
+      App.getApp().viewController.removeLoader();
       return;
     }
 

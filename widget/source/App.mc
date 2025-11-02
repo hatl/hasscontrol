@@ -164,7 +164,7 @@ class HassControlApp extends App.AppBase {
     }
 
     var battery_entity_id = App.Properties.getValue("report_battery_id");
-    if (battery_entity_id.length() > 0) {
+    if (battery_entity_id != null && battery_entity_id.length() > 0) {
       Hass.reportBatteryValue(battery_entity_id);
     }
 
