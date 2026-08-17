@@ -19,6 +19,7 @@ Please read through the instructions below, I will try to guide you through the 
   - [Configuration](#configuration)
     - [Basic Settings](#basic-settings)
     - [Entity Synchronization](#entity-synchronization)
+    - [Display](#display)
     - [Battery and Performance](#battery-and-performance)
     - [Authentication Options](#authentication-options)
   - [Logging in](#logging-in)
@@ -90,6 +91,20 @@ You can also use this field to "import" scenes if you don't want to create a gro
 I will describe this procedure in more detail below.
 
 ***Note:*** *The default start view is filtered to scenes and will not show light, switches etc., the start view can be changed in the widget settings in your Garmin device.*
+
+#### Display
+
+**Use list view style**: When enabled in settings (disabled by default), entities are shown as a scrollable 3-row list — previous, current, and next entity — with the selected row highlighted and a colored accent bar indicating the entity state (green = active/open, orange = transitional, blue = sensor value, purple = scene/script/button trigger, gray = inactive).
+
+When disabled, entities are shown in the classic style: one full-screen card per entity with a large centered icon and the entity name below it.
+
+This setting can be changed in two places, and both stay in sync:
+
+- In the **ConnectIQ app** on your phone: open the widget settings and toggle `Use list view style`.
+- On the **watch**: open the widget menu, go to `Settings`, and toggle `List View` (`3-row list` / `Classic card`). The change is applied immediately and persisted to the app settings.
+
+![Single Item View (default)](resources/screenshots/single_item_view.png) ![List View](resources/screenshots/list_view.png)
+
 
 #### Battery and Performance
 
@@ -181,6 +196,8 @@ If you done some modification to the group in Home Assistant, you can at any tim
 ### Navigation & Controls
 
 The widget is designed to be as simple as possible, but there are a few things to keep in mind.
+
+Entities can be displayed in two styles — a 3-row list (default) or the classic full-screen card view. See [Display](#display) for how to switch between them. Navigation works the same in both styles.
 
 - **Scrolling**: Depending on your watch model, you can scroll through the widget using the touchscreen or the up/down buttons. If your watch has a touchscreen, you can also use the swipe gesture to scroll.
 - **Selecting an entity**: To select an entity, simply scroll to it and press the "Select" button (usually the middle button on the right side of the watch).
