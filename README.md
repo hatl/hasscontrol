@@ -139,8 +139,11 @@ Sensors, scene/script/button triggers, and transitional states (opening, closing
 
 Because there is no reliable way for the watch to detect whether a display supports color, this is a manual setting. Enable `Colored icons` in the ConnectIQ app widget settings (disabled by default) to use the full Home Assistant colors. Leave it disabled on monochrome/limited displays to use white brightness instead (100% white for active/secure, 50% white for inactive/alert).
 
-![Single Item View (default)](resources/screenshots/single_item_view.png) ![List View](resources/screenshots/list_view.png) ![Colored Icons](resources/screenshots/colored_icons.png)
-
+<p>
+  <img src="resources/screenshots/single_item_view.png" alt="Single Item View (default)" width="100" />
+  <img src="resources/screenshots/list_view.png" alt="List View" width="100" />
+  <img src="resources/screenshots/colored_icons.png" alt="Colored Icons" width="100" />
+</p>
 
 #### Battery and Performance
 
