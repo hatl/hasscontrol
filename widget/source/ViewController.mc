@@ -40,8 +40,23 @@ class ViewController {
 
   // Returns true when the "useListView" setting is enabled, selecting the
   // 3-row list view instead of the classic single-card view.
-  hidden function useListEntityView() {
+  function useListEntityView() {
     return App.Properties.getValue("useListView");
+  }
+
+  // Rebuilds the entity view matching the configured start view in the
+  // currently selected style (list or classic) and switches to it.
+  // Used to apply a changed "useListView" setting immediately.
+  function switchCurrentEntityView() {
+    var startView = App.getApp().getStartView();
+
+    if (startView.equals(HassControlApp.SCENES_VIEW)) {
+      switchSceneView();
+    } else if (startView.equals(HassControlApp.ENTITIES_SCENES_VIEW)) {
+      switchEntitySceneView();
+    } else {
+      switchEntityView();
+    }
   }
 
   // Builds the [view, delegate] pair for the given entity types, honoring the

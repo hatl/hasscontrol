@@ -18,6 +18,8 @@ class MenuController {
         MENU_SELECT_START_VIEW_SCENES,
         MENU_SELECT_START_VIEW_ENTITIES_SCENES,
 
+        MENU_TOGGLE_LIST_VIEW,
+
         MENU_BACK
     }
 
@@ -78,6 +80,16 @@ class MenuController {
             "Start View",
             App.getApp().getStartView(),
             MenuController.MENU_SELECT_START_VIEW,
+            {}
+        ));
+        menu.addItem(new Ui.ToggleMenuItem(
+            "List View",
+            {
+                :enabled => "3-row list",
+                :disabled => "Classic card"
+            },
+            MenuController.MENU_TOGGLE_LIST_VIEW,
+            App.getApp().viewController.useListEntityView(),
             {}
         ));
         menu.addItem(new Ui.MenuItem(

@@ -49,6 +49,19 @@ class MenuDelegate extends Ui.Menu2InputDelegate {
             App.getApp().menu.showSelectStartViewMenu();
             return true;
         }
+        if (itemId == MenuController.MENU_TOGGLE_LIST_VIEW) {
+            var toggle = item as Ui.ToggleMenuItem;
+            var useList = toggle.isEnabled();
+
+            // Persist to the app property store so it syncs with the
+            // companion app settings and survives restarts.
+            App.Properties.setValue("useListView", useList);
+
+            // Rebuild the current entity view in the selected style.
+            Ui.popView(Ui.SLIDE_IMMEDIATE);
+            App.getApp().viewController.switchCurrentEntityView();
+            return true;
+        }
         if (itemId == MenuController.MENU_REFRESH_ENTITIES) {
             Hass.importEntities();
             return true;
