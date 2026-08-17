@@ -1,6 +1,6 @@
 <resources>
     <properties>
-        <property id="host" type="string">https://hassio.url</property>
+        <property id="host" type="string">https://homeassistant.local</property>
         <!-- <property id="port" type="number">443</property> -->
         <property id="accessToken" type="string"></property>
         <property id="scenes" type="string"></property>
