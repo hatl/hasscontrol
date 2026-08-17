@@ -1,4 +1,5 @@
 using Toybox.WatchUi as Ui;
+using Toybox.Application as App;
 using Toybox.Timer;
 using Toybox.Time;
 
@@ -37,19 +38,34 @@ class ViewController {
     return _loaderActive != null && !_errorView.isActive() && !_loginView.isActive();
   }
 
-  function getSceneView() {
-    var controller = new EntityListController(
-      [Hass.TYPE_SCENE]
-    );
+  // Returns true when the "useListView" setting is enabled, selecting the
+  // 3-row list view instead of the classic single-card view.
+  hidden function useListEntityView() {
+    return App.Properties.getValue("useListView");
+  }
+
+  // Builds the [view, delegate] pair for the given entity types, honoring the
+  // "useListView" setting: EntityListView (list) or EntityCardView (classic).
+  hidden function buildEntityView(types) {
+    var controller = new EntityListController(types);
+    var view = useListEntityView()
+      ? new EntityListView(controller)
+      : new EntityCardView(controller);
 
     return [
-      new EntityListView(controller),
+      view,
       new EntityListDelegate(controller)
     ];
   }
 
+  function getSceneView() {
+    return buildEntityView(
+      [Hass.TYPE_SCENE]
+    );
+  }
+
   function getEntityView() {
-    var controller = new EntityListController(
+    return buildEntityView(
       [
         Hass.TYPE_LIGHT,
         Hass.TYPE_SWITCH,
@@ -66,16 +82,11 @@ class ViewController {
         Hass.TYPE_SENSOR
       ]
     );
-
-    return [
-      new EntityListView(controller),
-      new EntityListDelegate(controller)
-    ];
   }
 
-  function getEntitySceneView() 
+  function getEntitySceneView()
   {
-    var controller = new EntityListController(
+    return buildEntityView(
       [
         Hass.TYPE_SCENE,
         Hass.TYPE_LIGHT,
@@ -93,11 +104,6 @@ class ViewController {
         Hass.TYPE_SENSOR
       ]
     );
-
-    return [
-      new EntityListView(controller),
-      new EntityListDelegate(controller)
-    ];
   }
 
   function pushSceneView() {
