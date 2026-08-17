@@ -5,7 +5,7 @@
         <property id="accessToken" type="string"></property>
         <property id="scenes" type="string"></property>
         <property id="group" type="string">Garmin</property>
-        <property id="refresh" type="boolean"></property>
+        <property id="refresh" type="boolean">false</property>
         <property id="report_battery_id" type="string"></property>
         <property id="additional_header_key" type="string"></property>
         <property id="additional_header_value" type="string"></property>
