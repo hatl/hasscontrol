@@ -119,12 +119,15 @@ class EntityCardView extends Ui.View {
     // Adjust icon position for rectangular screens
     var iconVertPosition = Utils.isRectangularScreen() ? 0.25 : 0.3;
 
-    var drawable = null;
+    // A Home Assistant `icon` attribute (mdi:*) that we have a matching bitmap
+    // for takes precedence; otherwise fall back to the type/state icon below.
+    var drawable = Utils.getMdiIconDrawable(entity);
 
     var type = entity.getType();
     var state = entity.getState();
     var sensorClass = entity.getSensorClass();
 
+    if (drawable == null) {
     if (type == Hass.TYPE_LIGHT) {
         if (state == Hass.STATE_ON) {
             drawable = WatchUi.loadResource(Rez.Drawables.LightOn);
@@ -209,6 +212,7 @@ class EntityCardView extends Ui.View {
       } else if (sensorClass == Hass.SENSOR_OTHER) {
         drawable = WatchUi.loadResource(Rez.Drawables.Unknown);
       }
+    }
     }
 
     if (drawable == null) {

@@ -88,10 +88,20 @@ module Hass {
   function loadScenesFromSettings() {
     var scenes = Utils.getScenesFromSettings();
 
+    // Snapshot the icon of each external entity before removal so a refreshed
+    // icon (set during refreshAllEntities) survives the rebuild below.
+    // Without this, the recreated entity always has icon=null and the mdi
+    // override never applies to scenes loaded from the "scenes" setting.
+    var preservedIcons = {};
+
     // first remove all external scenes to make sure we are not persisting any old scenes
     var entitiesToRemove = new [0];
     for (var i = 0; i < _entities.size(); i++) {
       if (_entities[i].isExternal()) {
+        var oldIcon = _entities[i].getIcon();
+        if (oldIcon != null) {
+          preservedIcons[_entities[i].getId()] = oldIcon;
+        }
         entitiesToRemove.add(_entities[i]);
       }
     }
@@ -109,12 +119,19 @@ module Hass {
           entity.setName(scenes[i][1]);
         }
       } else {
-        _entities.add(new Entity({
+        var newEntity = new Entity({
           :id => scenes[i][0],
           :name => scenes[i][1],
           :state => "scening",
           :ext => true
-        }));
+        });
+
+        // Restore the icon that was fetched before the rebuild (if any).
+        if (preservedIcons.hasKey(scenes[i][0])) {
+          newEntity.setIcon(preservedIcons[scenes[i][0]]);
+        }
+
+        _entities.add(newEntity);
       }
     }
   }
