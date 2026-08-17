@@ -376,6 +376,25 @@ module Utils {
     return null;
   }
 
+  // Draws an entity icon, tinting it to `tintColor` when one is given.
+  // Dc.drawBitmap2()'s :tintColor option requires the source bitmap to be in
+  // native color format; drawables.xml sets automaticPalette="false" on
+  // tinted icons to guarantee that, but the try/catch here is a safety net
+  // so a misconfigured or future icon degrades to an untinted draw instead
+  // of crashing the app (this previously threw an unhandled "Source must be
+  // native color format" exception on some color devices).
+  function drawIcon(dc, x, y, drawable, tintColor) {
+    if (tintColor != null) {
+      try {
+        dc.drawBitmap2(x, y, drawable, {:tintColor => tintColor});
+        return;
+      } catch (ex) {
+        // Fall through to an untinted draw below.
+      }
+    }
+    dc.drawBitmap(x, y, drawable);
+  }
+
   (:glance)
   function isRectangularScreen() {
     var deviceSettings = System.getDeviceSettings();

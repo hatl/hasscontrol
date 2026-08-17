@@ -221,12 +221,7 @@ class EntityCardView extends Ui.View {
 
     var iconX = cvw - (drawable.getHeight() / 2);
     var iconY = (vh * iconVertPosition) - (drawable.getHeight() / 2);
-    var tint = Utils.getIconTintColor(entity);
-    if (tint != null) {
-      dc.drawBitmap2(iconX, iconY, drawable, {:tintColor => tint});
-    } else {
-      dc.drawBitmap(iconX, iconY, drawable);
-    }
+    Utils.drawIcon(dc, iconX, iconY, drawable, Utils.getIconTintColor(entity));
   }
 
   function drawPageBar(dc) {

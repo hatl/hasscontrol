@@ -1,79 +1,85 @@
 <resources>
     <drawables>
         <bitmap id="LauncherIcon" filename="launcher_icon.png" />
-        <bitmap id="Scene" filename="scene.png" />
-        <bitmap id="LightOff" filename="light_off.png" />
-        <bitmap id="LightOn" filename="light_on.png" />
-        <bitmap id="SwitchOn" filename="switch_on.png" />
-        <bitmap id="SwitchOff" filename="switch_off.png" />
-        <bitmap id="ValveOpen" filename="valve_open.png" />
-        <bitmap id="ValveClosed" filename="valve_closed.png" />
-        <bitmap id="CheckboxOn" filename="checkbox_on.png" />
-        <bitmap id="CheckboxOff" filename="checkbox_off.png" />
-        <bitmap id="AutomationOn" filename="automation_on.png" />
-        <bitmap id="AutomationOff" filename="automation_off.png" />
-        <bitmap id="LockLocked" filename="lock_locked.png" />
-        <bitmap id="LockUnlocked" filename="lock_unlocked.png" />
-        <bitmap id="LockChanging" filename="lock_changing.png" />
-        <bitmap id="CoverClosed" filename="cover_closed.png" />
-        <bitmap id="CoverClosing" filename="cover_closing.png" />
-        <bitmap id="CoverOpen" filename="cover_open.png" />
-        <bitmap id="CoverOpening" filename="cover_opening.png" />
-        <bitmap id="FanOn" filename="fan_on.png" />
-        <bitmap id="FanOff" filename="fan_off.png" />
-        <bitmap id="BinaryOn" filename="binary_on.png" />
-        <bitmap id="BinaryOff" filename="binary_off.png" />
-        <bitmap id="ScriptOff" filename="script_off.png" />
-        <bitmap id="Unknown" filename="unknown.png" />
+        <!-- automaticPalette="false": these icons are tinted at draw time via
+             Dc.drawBitmap2(:tintColor), which requires a native color format
+             bitmap. The compiler defaults to an auto-generated (indexed)
+             palette on 16-bit color devices, which throws "Source must be
+             native color format" when used as a drawBitmap2 tint source. -->
+        <bitmap id="Scene" filename="scene.png" automaticPalette="false" />
+        <bitmap id="LightOff" filename="light_off.png" automaticPalette="false" />
+        <bitmap id="LightOn" filename="light_on.png" automaticPalette="false" />
+        <bitmap id="SwitchOn" filename="switch_on.png" automaticPalette="false" />
+        <bitmap id="SwitchOff" filename="switch_off.png" automaticPalette="false" />
+        <bitmap id="ValveOpen" filename="valve_open.png" automaticPalette="false" />
+        <bitmap id="ValveClosed" filename="valve_closed.png" automaticPalette="false" />
+        <bitmap id="CheckboxOn" filename="checkbox_on.png" automaticPalette="false" />
+        <bitmap id="CheckboxOff" filename="checkbox_off.png" automaticPalette="false" />
+        <bitmap id="AutomationOn" filename="automation_on.png" automaticPalette="false" />
+        <bitmap id="AutomationOff" filename="automation_off.png" automaticPalette="false" />
+        <bitmap id="LockLocked" filename="lock_locked.png" automaticPalette="false" />
+        <bitmap id="LockUnlocked" filename="lock_unlocked.png" automaticPalette="false" />
+        <bitmap id="LockChanging" filename="lock_changing.png" automaticPalette="false" />
+        <bitmap id="CoverClosed" filename="cover_closed.png" automaticPalette="false" />
+        <bitmap id="CoverClosing" filename="cover_closing.png" automaticPalette="false" />
+        <bitmap id="CoverOpen" filename="cover_open.png" automaticPalette="false" />
+        <bitmap id="CoverOpening" filename="cover_opening.png" automaticPalette="false" />
+        <bitmap id="FanOn" filename="fan_on.png" automaticPalette="false" />
+        <bitmap id="FanOff" filename="fan_off.png" automaticPalette="false" />
+        <bitmap id="BinaryOn" filename="binary_on.png" automaticPalette="false" />
+        <bitmap id="BinaryOff" filename="binary_off.png" automaticPalette="false" />
+        <bitmap id="ScriptOff" filename="script_off.png" automaticPalette="false" />
+        <bitmap id="Unknown" filename="unknown.png" automaticPalette="false" />
+        <!-- SmileySad is only ever drawn untinted (empty-state placeholder); keep its palette. -->
         <bitmap id="SmileySad" filename="smiley_sad.png" />
-        <bitmap id="Button" filename="button.png" />
-        <bitmap id="Temperature" filename="temperature.png" />
-        <bitmap id="Humidity" filename="humidity.png" />
-        <bitmap id="CO2" filename="co2.png" />
-        <bitmap id="AirPM" filename="molecule.png" />
-        <bitmap id="EnergyMeter" filename="energy_meter.png" />
-        <bitmap id="WaterMeter" filename="water_meter.png" />
-        <bitmap id="GasMeter" filename="gas_meter.png" />
+        <bitmap id="Button" filename="button.png" automaticPalette="false" />
+        <bitmap id="Temperature" filename="temperature.png" automaticPalette="false" />
+        <bitmap id="Humidity" filename="humidity.png" automaticPalette="false" />
+        <bitmap id="CO2" filename="co2.png" automaticPalette="false" />
+        <bitmap id="AirPM" filename="molecule.png" automaticPalette="false" />
+        <bitmap id="EnergyMeter" filename="energy_meter.png" automaticPalette="false" />
+        <bitmap id="WaterMeter" filename="water_meter.png" automaticPalette="false" />
+        <bitmap id="GasMeter" filename="gas_meter.png" automaticPalette="false" />
 
         <!-- Material Design Icons, matched from Home Assistant's `icon` attribute (mdi:*) -->
-        <bitmap id="MdiMovie" filename="mdi_movie.png" />
-        <bitmap id="MdiMovieOff" filename="mdi_movie_off.png" />
-        <bitmap id="MdiBluetooth" filename="mdi_bluetooth.png" />
-        <bitmap id="MdiMusic" filename="mdi_music.png" />
-        <bitmap id="MdiSleep" filename="mdi_sleep.png" />
-        <bitmap id="MdiVacuum" filename="mdi_vacuum.png" />
-        <bitmap id="MdiRadiator" filename="mdi_radiator.png" />
-        <bitmap id="MdiRestart" filename="mdi_restart.png" />
-        <bitmap id="MdiLightbulb" filename="mdi_lightbulb.png" />
-        <bitmap id="MdiPowerPlug" filename="mdi_power_plug.png" />
-        <bitmap id="MdiTelevision" filename="mdi_television.png" />
-        <bitmap id="MdiSpeaker" filename="mdi_speaker.png" />
-        <bitmap id="MdiCoffee" filename="mdi_coffee.png" />
-        <bitmap id="MdiFridge" filename="mdi_fridge.png" />
-        <bitmap id="MdiWasher" filename="mdi_washer.png" />
-        <bitmap id="MdiThermostat" filename="mdi_thermostat.png" />
-        <bitmap id="MdiHome" filename="mdi_home.png" />
-        <bitmap id="MdiGarage" filename="mdi_garage.png" />
-        <bitmap id="MdiDoor" filename="mdi_door.png" />
-        <bitmap id="MdiWindow" filename="mdi_window.png" />
-        <bitmap id="MdiBlinds" filename="mdi_blinds.png" />
-        <bitmap id="MdiWeatherNight" filename="mdi_weather_night.png" />
-        <bitmap id="MdiWeatherSunny" filename="mdi_weather_sunny.png" />
-        <bitmap id="MdiBell" filename="mdi_bell.png" />
-        <bitmap id="MdiShield" filename="mdi_shield.png" />
-        <bitmap id="MdiKey" filename="mdi_key.png" />
-        <bitmap id="MdiPlay" filename="mdi_play.png" />
-        <bitmap id="MdiPause" filename="mdi_pause.png" />
-        <bitmap id="MdiStop" filename="mdi_stop.png" />
-        <bitmap id="MdiVolume" filename="mdi_volume.png" />
-        <bitmap id="MdiFire" filename="mdi_fire.png" />
-        <bitmap id="MdiSnowflake" filename="mdi_snowflake.png" />
-        <bitmap id="MdiLeaf" filename="mdi_leaf.png" />
-        <bitmap id="MdiBattery" filename="mdi_battery.png" />
-        <bitmap id="MdiFood" filename="mdi_food.png" />
-        <bitmap id="MdiSofa" filename="mdi_sofa.png" />
-        <bitmap id="MdiDeskLamp" filename="mdi_desk_lamp.png" />
-        <bitmap id="MdiKettle" filename="mdi_kettle.png" />
-        <bitmap id="MdiWater" filename="mdi_water.png" />
+        <bitmap id="MdiMovie" filename="mdi_movie.png" automaticPalette="false" />
+        <bitmap id="MdiMovieOff" filename="mdi_movie_off.png" automaticPalette="false" />
+        <bitmap id="MdiBluetooth" filename="mdi_bluetooth.png" automaticPalette="false" />
+        <bitmap id="MdiMusic" filename="mdi_music.png" automaticPalette="false" />
+        <bitmap id="MdiSleep" filename="mdi_sleep.png" automaticPalette="false" />
+        <bitmap id="MdiVacuum" filename="mdi_vacuum.png" automaticPalette="false" />
+        <bitmap id="MdiRadiator" filename="mdi_radiator.png" automaticPalette="false" />
+        <bitmap id="MdiRestart" filename="mdi_restart.png" automaticPalette="false" />
+        <bitmap id="MdiLightbulb" filename="mdi_lightbulb.png" automaticPalette="false" />
+        <bitmap id="MdiPowerPlug" filename="mdi_power_plug.png" automaticPalette="false" />
+        <bitmap id="MdiTelevision" filename="mdi_television.png" automaticPalette="false" />
+        <bitmap id="MdiSpeaker" filename="mdi_speaker.png" automaticPalette="false" />
+        <bitmap id="MdiCoffee" filename="mdi_coffee.png" automaticPalette="false" />
+        <bitmap id="MdiFridge" filename="mdi_fridge.png" automaticPalette="false" />
+        <bitmap id="MdiWasher" filename="mdi_washer.png" automaticPalette="false" />
+        <bitmap id="MdiThermostat" filename="mdi_thermostat.png" automaticPalette="false" />
+        <bitmap id="MdiHome" filename="mdi_home.png" automaticPalette="false" />
+        <bitmap id="MdiGarage" filename="mdi_garage.png" automaticPalette="false" />
+        <bitmap id="MdiDoor" filename="mdi_door.png" automaticPalette="false" />
+        <bitmap id="MdiWindow" filename="mdi_window.png" automaticPalette="false" />
+        <bitmap id="MdiBlinds" filename="mdi_blinds.png" automaticPalette="false" />
+        <bitmap id="MdiWeatherNight" filename="mdi_weather_night.png" automaticPalette="false" />
+        <bitmap id="MdiWeatherSunny" filename="mdi_weather_sunny.png" automaticPalette="false" />
+        <bitmap id="MdiBell" filename="mdi_bell.png" automaticPalette="false" />
+        <bitmap id="MdiShield" filename="mdi_shield.png" automaticPalette="false" />
+        <bitmap id="MdiKey" filename="mdi_key.png" automaticPalette="false" />
+        <bitmap id="MdiPlay" filename="mdi_play.png" automaticPalette="false" />
+        <bitmap id="MdiPause" filename="mdi_pause.png" automaticPalette="false" />
+        <bitmap id="MdiStop" filename="mdi_stop.png" automaticPalette="false" />
+        <bitmap id="MdiVolume" filename="mdi_volume.png" automaticPalette="false" />
+        <bitmap id="MdiFire" filename="mdi_fire.png" automaticPalette="false" />
+        <bitmap id="MdiSnowflake" filename="mdi_snowflake.png" automaticPalette="false" />
+        <bitmap id="MdiLeaf" filename="mdi_leaf.png" automaticPalette="false" />
+        <bitmap id="MdiBattery" filename="mdi_battery.png" automaticPalette="false" />
+        <bitmap id="MdiFood" filename="mdi_food.png" automaticPalette="false" />
+        <bitmap id="MdiSofa" filename="mdi_sofa.png" automaticPalette="false" />
+        <bitmap id="MdiDeskLamp" filename="mdi_desk_lamp.png" automaticPalette="false" />
+        <bitmap id="MdiKettle" filename="mdi_kettle.png" automaticPalette="false" />
+        <bitmap id="MdiWater" filename="mdi_water.png" automaticPalette="false" />
     </drawables>
 </resources>
