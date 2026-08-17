@@ -58,6 +58,10 @@ class MenuDelegate extends Ui.Menu2InputDelegate {
             App.Properties.setValue("useListView", useList);
 
             // Rebuild the current entity view in the selected style.
+            // Pop settings menu AND root menu first, so the view gets
+            // replaced instead of the root menu - otherwise the back
+            // button would reveal the old view underneath.
+            Ui.popView(Ui.SLIDE_IMMEDIATE);
             Ui.popView(Ui.SLIDE_IMMEDIATE);
             App.getApp().viewController.switchCurrentEntityView();
             return true;
