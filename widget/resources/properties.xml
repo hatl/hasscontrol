@@ -11,7 +11,7 @@
         <property id="additional_header_value" type="string"></property>
         <property id="closeAfterAction" type="boolean">false</property>
         <property id="autoCloseSeconds" type="number">0</property>
-        <property id="useListView" type="boolean">true</property>
+        <property id="useListView" type="boolean">false</property>
     </properties>
 
     <strings>
