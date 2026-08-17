@@ -201,12 +201,17 @@ module Hass {
     var sensorClass = null;
     var sensorClassStr = null;
     var icon = null;
+    var deviceClass = null;
 
     if (data[:body]["attributes"] != null) {
       name = data[:body]["attributes"]["friendly_name"];
 
       // Home Assistant only sends `icon` when the entity has a custom icon set.
       icon = data[:body]["attributes"]["icon"];
+
+      // Raw device_class string (e.g. "battery") — used as an icon fallback
+      // when no custom `icon` is set.
+      deviceClass = data[:body]["attributes"]["device_class"];
 
       if (data[:body]["attributes"]["unit_of_measurement"] != null) {
         state = data[:body]["state"] + data[:body]["attributes"]["unit_of_measurement"];
@@ -257,6 +262,9 @@ module Hass {
 
     // Reflect the current icon attribute (null clears a previously stored icon).
     entity.setIcon(icon);
+
+    // Reflect the current device_class (null clears a previously stored value).
+    entity.setDeviceClass(deviceClass);
 
     if (data[:context] != null && data[:context][:callback] != null) {
       data[:context][:callback].invoke(null, entity);

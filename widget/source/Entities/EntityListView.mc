@@ -179,7 +179,7 @@ class EntityListView extends Ui.View {
   hidden var _mTimer;
   hidden var _mTimerActive;
   hidden var _mShowBar;
-  hidden var _mIconCache; // entityId => { :drawable, :type, :state, :sensorClass, :icon }
+  hidden var _mIconCache; // entityId => { :drawable, :type, :state, :sensorClass, :icon, :deviceClass }
 
   function initialize(controller) {
     View.initialize();
@@ -427,6 +427,7 @@ class EntityListView extends Ui.View {
       var state       = entity.getState();
       var sensorClass = entity.getSensorClass();
       var icon        = entity.getIcon();
+      var deviceClass = entity.getDeviceClass();
       visibleIds[id]  = true;
 
       var cached = _mIconCache[id];
@@ -434,13 +435,15 @@ class EntityListView extends Ui.View {
           || cached[:type]        != type
           || cached[:state]       != state
           || cached[:sensorClass] != sensorClass
-          || !strEq(cached[:icon], icon)) {
+          || !strEq(cached[:icon], icon)
+          || !strEq(cached[:deviceClass], deviceClass)) {
         _mIconCache[id] = {
           :drawable    => getIconDrawable(entity),
           :type        => type,
           :state       => state,
           :sensorClass => sensorClass,
-          :icon        => icon
+          :icon        => icon,
+          :deviceClass => deviceClass
         };
       }
     }

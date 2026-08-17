@@ -270,9 +270,52 @@ module Utils {
     return _mdiMap;
   }
 
-  // Resolves an entity's Home Assistant `icon` attribute (mdi:*) to a drawable.
-  // Returns null when the entity has no custom icon or it isn't in the bundled
-  // set — callers then fall back to the type/state icon.
+  // Maps a Home Assistant `device_class` to a bundled drawable. Used as a
+  // fallback icon when an entity has no custom `icon` attribute — Home
+  // Assistant derives these icons from the device class in its own UI but does
+  // not send them in the `icon` attribute. Only device classes with a matching
+  // bundled glyph are listed; extend alongside getMdiMap().
+  var _deviceClassMap = null;
+
+  function getDeviceClassMap() {
+    if (_deviceClassMap == null) {
+      _deviceClassMap = {
+        // sensor / binary_sensor device classes
+        "battery"          => Rez.Drawables.MdiBattery,
+        "battery_charging" => Rez.Drawables.MdiBattery,
+        "temperature"      => Rez.Drawables.Temperature,
+        "humidity"         => Rez.Drawables.Humidity,
+        "carbon_dioxide"   => Rez.Drawables.CO2,
+        "pm25"             => Rez.Drawables.AirPM,
+        "pm10"             => Rez.Drawables.AirPM,
+        "energy"           => Rez.Drawables.EnergyMeter,
+        "power"            => Rez.Drawables.MdiPowerPlug,
+        "water"            => Rez.Drawables.WaterMeter,
+        "gas"              => Rez.Drawables.GasMeter,
+        "illuminance"      => Rez.Drawables.MdiWeatherSunny,
+        "motion"           => Rez.Drawables.MdiPlay,
+        "door"             => Rez.Drawables.MdiDoor,
+        "window"           => Rez.Drawables.MdiWindow,
+        "garage_door"      => Rez.Drawables.MdiGarage,
+        "lock"             => Rez.Drawables.MdiKey,
+        "smoke"            => Rez.Drawables.MdiFire,
+        "heat"             => Rez.Drawables.MdiFire,
+        "moisture"         => Rez.Drawables.MdiWater,
+        "plug"             => Rez.Drawables.MdiPowerPlug,
+        "outlet"           => Rez.Drawables.MdiPowerPlug,
+        "light"            => Rez.Drawables.MdiLightbulb,
+        "tv"               => Rez.Drawables.MdiTelevision,
+        "speaker"          => Rez.Drawables.MdiSpeaker,
+        "vacuum"           => Rez.Drawables.MdiVacuum,
+      };
+    }
+    return _deviceClassMap;
+  }
+
+  // Resolves an entity's icon to a drawable. Priority:
+  //   1. the explicit Home Assistant `icon` attribute (mdi:*), then
+  //   2. the entity's `device_class` (the icon HA's own UI would show), then
+  //   3. null — callers fall back to the type/state icon.
   function getMdiIconDrawable(entity) {
     var icon = entity.getIcon();
 
@@ -280,6 +323,15 @@ module Utils {
       var mdiId = getMdiMap().get(icon);
       if (mdiId != null) {
         return WatchUi.loadResource(mdiId);
+      }
+    }
+
+    // No custom icon (or it isn't bundled): fall back to the device class.
+    var deviceClass = entity.getDeviceClass();
+    if (deviceClass != null) {
+      var dcId = getDeviceClassMap().get(deviceClass);
+      if (dcId != null) {
+        return WatchUi.loadResource(dcId);
       }
     }
 
