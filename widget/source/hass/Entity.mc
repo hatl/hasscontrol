@@ -18,7 +18,8 @@ module Hass {
         :name => dict["name"] != null ? dict["name"] : dict["id"],
         :state => dict["state"],
         :ext => dict["ext"],
-        :sensorClass => dict["sensorClass"]
+        :sensorClass => dict["sensorClass"],
+        :icon => dict["icon"]
       });
     }
 
@@ -106,6 +107,7 @@ module Hass {
     hidden var _mExt; // Is this entity loaded from settings?
     hidden var _mSensorValue; // Custom state info text
     hidden var _mSensorClass; // Device class for sensor
+    hidden var _mIcon; // Home Assistant `icon` attribute (e.g. "mdi:movie-open")
 
     function initialize(entity) {
       _mId = entity[:id];
@@ -113,6 +115,7 @@ module Hass {
       _mState = Entity.stringToState(entity[:state]);
       _mExt = entity[:ext] == true;
       _mSensorClass = entity[:sensorClass];
+      _mIcon = entity[:icon];
 
       // Null safety: prevent crash if _mId is null
       if (_mId == null) {
@@ -220,6 +223,15 @@ module Hass {
       _mSensorClass = newSensorClass;
     }
 
+    // Home Assistant `icon` attribute (e.g. "mdi:movie-open"), or null when unset.
+    function getIcon() {
+      return _mIcon;
+    }
+
+    function setIcon(newIcon) {
+      _mIcon = newIcon;
+    }
+
     function isExternal() {
       return _mExt;
     }
@@ -239,6 +251,7 @@ module Hass {
         "state" => Entity.stateToString(_mState),
         "ext" => _mExt,
         "sensorClass" => _mSensorClass,
+        "icon" => _mIcon,
       };
     }
 

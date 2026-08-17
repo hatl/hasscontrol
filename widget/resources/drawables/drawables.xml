@@ -34,5 +34,46 @@
         <bitmap id="EnergyMeter" filename="energy_meter.png" />
         <bitmap id="WaterMeter" filename="water_meter.png" />
         <bitmap id="GasMeter" filename="gas_meter.png" />
+
+        <!-- Material Design Icons, matched from Home Assistant's `icon` attribute (mdi:*) -->
+        <bitmap id="MdiMovie" filename="mdi_movie.png" />
+        <bitmap id="MdiMovieOff" filename="mdi_movie_off.png" />
+        <bitmap id="MdiBluetooth" filename="mdi_bluetooth.png" />
+        <bitmap id="MdiMusic" filename="mdi_music.png" />
+        <bitmap id="MdiSleep" filename="mdi_sleep.png" />
+        <bitmap id="MdiVacuum" filename="mdi_vacuum.png" />
+        <bitmap id="MdiRadiator" filename="mdi_radiator.png" />
+        <bitmap id="MdiRestart" filename="mdi_restart.png" />
+        <bitmap id="MdiLightbulb" filename="mdi_lightbulb.png" />
+        <bitmap id="MdiPowerPlug" filename="mdi_power_plug.png" />
+        <bitmap id="MdiTelevision" filename="mdi_television.png" />
+        <bitmap id="MdiSpeaker" filename="mdi_speaker.png" />
+        <bitmap id="MdiCoffee" filename="mdi_coffee.png" />
+        <bitmap id="MdiFridge" filename="mdi_fridge.png" />
+        <bitmap id="MdiWasher" filename="mdi_washer.png" />
+        <bitmap id="MdiThermostat" filename="mdi_thermostat.png" />
+        <bitmap id="MdiHome" filename="mdi_home.png" />
+        <bitmap id="MdiGarage" filename="mdi_garage.png" />
+        <bitmap id="MdiDoor" filename="mdi_door.png" />
+        <bitmap id="MdiWindow" filename="mdi_window.png" />
+        <bitmap id="MdiBlinds" filename="mdi_blinds.png" />
+        <bitmap id="MdiWeatherNight" filename="mdi_weather_night.png" />
+        <bitmap id="MdiWeatherSunny" filename="mdi_weather_sunny.png" />
+        <bitmap id="MdiBell" filename="mdi_bell.png" />
+        <bitmap id="MdiShield" filename="mdi_shield.png" />
+        <bitmap id="MdiKey" filename="mdi_key.png" />
+        <bitmap id="MdiPlay" filename="mdi_play.png" />
+        <bitmap id="MdiPause" filename="mdi_pause.png" />
+        <bitmap id="MdiStop" filename="mdi_stop.png" />
+        <bitmap id="MdiVolume" filename="mdi_volume.png" />
+        <bitmap id="MdiFire" filename="mdi_fire.png" />
+        <bitmap id="MdiSnowflake" filename="mdi_snowflake.png" />
+        <bitmap id="MdiLeaf" filename="mdi_leaf.png" />
+        <bitmap id="MdiBattery" filename="mdi_battery.png" />
+        <bitmap id="MdiFood" filename="mdi_food.png" />
+        <bitmap id="MdiSofa" filename="mdi_sofa.png" />
+        <bitmap id="MdiDeskLamp" filename="mdi_desk_lamp.png" />
+        <bitmap id="MdiKettle" filename="mdi_kettle.png" />
+        <bitmap id="MdiWater" filename="mdi_water.png" />
     </drawables>
 </resources>

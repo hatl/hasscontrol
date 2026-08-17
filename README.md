@@ -15,6 +15,7 @@ Please read through the instructions below, I will try to guide you through the 
 - [HassControl](#hasscontrol)
   - [Prerequisites](#prerequisites)
   - [Supported entity types](#supported-entity-types)
+  - [Custom icons](#custom-icons)
   - [Installation](#installation)
   - [Configuration](#configuration)
     - [Basic Settings](#basic-settings)
@@ -44,24 +45,46 @@ As soon as you get out of range from the phone or closes the app the widget will
 ### Supported entity types
 Currently only following Home Assistant entities are supported:
 
-Entity type | Note
---- | ---
-binary_sensor | Only displays basic boolean state, device class is not supported.
-input_boolean | Toggling of its state is supported.
-light | Only turning on/off is supported, the rest like colour, brightness, etc. are not supported.
-button | Push/Trigger a button
-input_button | Push/Trigger an input button
-lock | Both locking and unlocking are supported.
-cover | Both closing and opening the cover is supported.
-fan | Turning on and off is supported. Changing speed is not.
-switch | Only turning on/off, energy consumption and standby mode are not supported.
-automation* | Can be turned on/off.
-scene* | Execution
-script* | Execution
-sensor | Display values for the following sensor types: temperature, humidity, CO2, PM10, PM25, energy, gas and water (others will be displayed but won't have a proper icon).
+ Entity type   | Note                                                                                                                                                                  
+---------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ binary_sensor | Only displays basic boolean state, device class is not supported.                                                                                                     
+ input_boolean | Toggling of its state is supported.                                                                                                                                   
+ light         | Only turning on/off is supported, the rest like colour, brightness, etc. are not supported.                                                                           
+ button        | Push/Trigger a button                                                                                                                                                 
+ input_button  | Push/Trigger an input button                                                                                                                                          
+ lock          | Both locking and unlocking are supported.                                                                                                                             
+ cover         | Both closing and opening the cover is supported.                                                                                                                      
+ fan           | Turning on and off is supported. Changing speed is not.                                                                                                               
+ switch        | Only turning on/off, energy consumption and standby mode are not supported.                                                                                           
+ automation*   | Can be turned on/off.                                                                                                                                                 
+ scene*        | Execution                                                                                                                                                             
+ script*       | Execution                                                                                                                                                             
+ sensor        | Display values for the following sensor types: temperature, humidity, CO2, PM10, PM25, energy, gas and water (others will be displayed but won't have a proper icon). 
 
 
 \* marked are not entities in the true sense of the word, but why have two tables
+
+### Custom icons
+By default each entity is drawn with an icon based on its type and state (e.g. every
+`script.*` shares one icon). If an entity has a custom [Material Design Icon](https://pictogrammers.com/library/mdi/)
+set in Home Assistant — via the entity's `icon:` (YAML) or the UI *Settings → Icon* field —
+HassControl now uses that icon instead, when it's one of the bundled glyphs.
+
+```yaml
+# scripts.yaml — the script now shows a film-reel icon on the watch instead of the generic script icon
+movie_mode:
+  alias: Movie mode
+  icon: mdi:movie-open
+  sequence: ...
+```
+
+Set icons are matched against a bundled subset of MDI (lights, plugs, media, climate,
+covers/blinds, security, weather, appliances, and more — see `getMdiMap()` in
+`widget/source/Entities/EntityListView.mc`). An entity whose icon isn't in the bundled
+set simply falls back to the default type/state icon, so nothing breaks.
+
+To add another icon: drop a 60×60 white-on-transparent PNG in `widget/resources/drawables/`,
+register it in `drawables.xml`, and map the `mdi:*` name(s) to it in `getMdiMap()`.
 
 ### Installation
 The easiest way to install the app is to download and install the [ConnectIQ app](https://support.garmin.com/en-US/?faq=mmm2rz2WBI3zbdFQYdiwX8) from Garmin on your smartphone.
