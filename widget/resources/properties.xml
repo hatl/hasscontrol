@@ -12,6 +12,7 @@
         <property id="closeAfterAction" type="boolean">false</property>
         <property id="autoCloseSeconds" type="number">0</property>
         <property id="useListView" type="boolean">false</property>
+        <property id="coloredIcons" type="boolean">false</property>
     </properties>
 
     <strings>
@@ -27,6 +28,7 @@
        <string id="closeAfterAction_title">Close App after successful action</string>
        <string id="autoCloseSeconds_title">Auto-close after inactivity (seconds, 0=off)</string>
        <string id="useListView_title">Use list view style (3-row list instead of classic card)</string>
+       <string id="coloredIcons_title">Colored icons (Home Assistant state colors)</string>
     </strings>
 
     <settings>
@@ -64,6 +66,9 @@
             <settingConfig type="numeric" min="0" max="300" />
         </setting>
         <setting propertyKey="@Properties.useListView" title="@Strings.useListView_title">
+            <settingConfig type="boolean" />
+        </setting>
+        <setting propertyKey="@Properties.coloredIcons" title="@Strings.coloredIcons_title">
             <settingConfig type="boolean" />
         </setting>
     </settings>

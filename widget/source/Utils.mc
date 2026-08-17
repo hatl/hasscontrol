@@ -338,6 +338,44 @@ module Utils {
     return null;
   }
 
+  // Returns the tint color for an entity's state icon, or null when the state
+  // has no state-specific tint (sensors, scene/script/button triggers and
+  // transitional states keep their current rendering).
+  //
+  // Two palettes are used depending on the "coloredIcons" setting:
+  //  - colored (true):  Home Assistant style colors.
+  //  - mono    (false): white brightness only, for monochrome/limited displays.
+  //
+  // State mapping:
+  //   on/open      -> on-highlight  (#FFC010 / 100% white)
+  //   off/closed   -> off-dim       (#46729D / 50% white)
+  //   unlocked     -> alert red     (#F44539 / 50% white)
+  //   locked       -> secure green  (#4DAD51 / 100% white)
+  //
+  // The color is applied at draw time via Dc.drawBitmap2(:tintColor), so the
+  // cached drawables do not need to change.
+  function getIconTintColor(entity) {
+    var state = entity.getState();
+
+    // "coloredIcons" has a default in properties.xml, so it is never null.
+    var colored = App.Properties.getValue("coloredIcons");
+
+    if (state == Hass.STATE_LOCKED) {
+      return colored ? 0x4DAD51 : 0xFFFFFF; // secure: green / full white
+    }
+    if (state == Hass.STATE_UNLOCKED) {
+      return colored ? 0xF44539 : 0x808080; // alert: red / 50% white
+    }
+    if (state == Hass.STATE_ON || state == Hass.STATE_OPEN) {
+      return colored ? 0xFFC010 : 0xFFFFFF; // on-highlight
+    }
+    if (state == Hass.STATE_OFF || state == Hass.STATE_CLOSED) {
+      return colored ? 0x46729D : 0x808080; // off-dim
+    }
+
+    return null;
+  }
+
   (:glance)
   function isRectangularScreen() {
     var deviceSettings = System.getDeviceSettings();

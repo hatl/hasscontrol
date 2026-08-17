@@ -533,7 +533,12 @@ class EntityListView extends Ui.View {
       var iconY = iconH <= cH
         ? cY + (cH - iconH) / 2
         : rowY + (rowHeight - iconH) / 2;
-      dc.drawBitmap(iconX, iconY, drawable);
+      var tint = Utils.getIconTintColor(entity);
+      if (tint != null) {
+        dc.drawBitmap2(iconX, iconY, drawable, {:tintColor => tint});
+      } else {
+        dc.drawBitmap(iconX, iconY, drawable);
+      }
     }
 
     // ── Build text block ─────────────────────────────────────────────────────

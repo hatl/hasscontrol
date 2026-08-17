@@ -45,21 +45,21 @@ As soon as you get out of range from the phone or closes the app the widget will
 ### Supported entity types
 Currently only following Home Assistant entities are supported:
 
- Entity type   | Note                                                                                                                                                                  
+ Entity type   | Note
 ---------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------
- binary_sensor | Only displays basic boolean state, device class is not supported.                                                                                                     
- input_boolean | Toggling of its state is supported.                                                                                                                                   
- light         | Only turning on/off is supported, the rest like colour, brightness, etc. are not supported.                                                                           
- button        | Push/Trigger a button                                                                                                                                                 
- input_button  | Push/Trigger an input button                                                                                                                                          
- lock          | Both locking and unlocking are supported.                                                                                                                             
- cover         | Both closing and opening the cover is supported.                                                                                                                      
- fan           | Turning on and off is supported. Changing speed is not.                                                                                                               
- switch        | Only turning on/off, energy consumption and standby mode are not supported.                                                                                           
- automation*   | Can be turned on/off.                                                                                                                                                 
- scene*        | Execution                                                                                                                                                             
- script*       | Execution                                                                                                                                                             
- sensor        | Display values for the following sensor types: temperature, humidity, CO2, PM10, PM25, energy, gas and water (others will be displayed but won't have a proper icon). 
+ binary_sensor | Only displays basic boolean state, device class is not supported.
+ input_boolean | Toggling of its state is supported.
+ light         | Only turning on/off is supported, the rest like colour, brightness, etc. are not supported.
+ button        | Push/Trigger a button
+ input_button  | Push/Trigger an input button
+ lock          | Both locking and unlocking are supported.
+ cover         | Both closing and opening the cover is supported.
+ fan           | Turning on and off is supported. Changing speed is not.
+ switch        | Only turning on/off, energy consumption and standby mode are not supported.
+ automation*   | Can be turned on/off.
+ scene*        | Execution
+ script*       | Execution
+ sensor        | Display values for the following sensor types: temperature, humidity, CO2, PM10, PM25, energy, gas and water (others will be displayed but won't have a proper icon).
 
 
 \* marked are not entities in the true sense of the word, but why have two tables
@@ -126,7 +126,20 @@ This setting can be changed in two places, and both stay in sync:
 - In the **ConnectIQ app** on your phone: open the widget settings and toggle `Use list view style`.
 - On the **watch**: open the widget menu, go to `Settings`, and toggle `List View` (`3-row list` / `Classic card`). The change is applied immediately and persisted to the app settings.
 
-![Single Item View (default)](resources/screenshots/single_item_view.png) ![List View](resources/screenshots/list_view.png)
+**Colored icons**: State icons are tinted to match Home Assistant's default state colors, so you can tell an entity's state at a glance. This works in both the list view and the classic view.
+
+| State | Colored icons on | Colored icons off (mono) |
+|-------|------------------|--------------------------|
+| on / open | amber `#FFC010` | 100% white |
+| off / closed | blue `#46729D` | 50% white |
+| unlocked | red `#F44539` | 50% white |
+| locked | green `#4DAD51` | 100% white |
+
+Sensors, scene/script/button triggers, and transitional states (opening, closing, locking, unlocking) are not tinted and keep their normal rendering.
+
+Because there is no reliable way for the watch to detect whether a display supports color, this is a manual setting. Enable `Colored icons` in the ConnectIQ app widget settings (disabled by default) to use the full Home Assistant colors. Leave it disabled on monochrome/limited displays to use white brightness instead (100% white for active/secure, 50% white for inactive/alert).
+
+![Single Item View (default)](resources/screenshots/single_item_view.png) ![List View](resources/screenshots/list_view.png) ![Colored Icons](resources/screenshots/colored_icons.png)
 
 
 #### Battery and Performance
