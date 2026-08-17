@@ -9,10 +9,12 @@ class EntityListController {
   hidden var _mTypes;
   hidden var _mHassModel;
   hidden var _mIndex;
+  hidden var _mRowHeight; // px height of one row in EntityListView's 3-row layout; null in card view
 
   function initialize(types) {
     _mTypes = types;
     _mIndex = 0;
+    _mRowHeight = null;
 
     refreshEntities();
   }
@@ -53,6 +55,16 @@ class EntityListController {
     return _mIndex;
   }
 
+  // Recorded by EntityListView.onUpdate() so the delegate can hit-test which
+  // row a touch coordinate falls into. Stays null when using EntityCardView.
+  function setRowHeight(rowHeight) {
+    _mRowHeight = rowHeight;
+  }
+
+  function getRowHeight() {
+    return _mRowHeight;
+  }
+
   function getCount() {
     return _mEntities.size();
   }
@@ -84,7 +96,12 @@ class EntityListDelegate extends Ui.BehaviorDelegate {
     return true;
   }
 
-  function onSelect() {
+  // Toggles the entity currently shown at the center. Called from onKey()
+  // (physical Enter button) and onTap() (touch) instead of onSelect() itself:
+  // BehaviorDelegate only calls the InputDelegate-level function (onKey/onTap)
+  // when the corresponding behavior function returns false, so onSelect()
+  // must defer to them to learn whether the tap position matters.
+  hidden function toggleCurrentEntity() {
     App.getApp().resetInactivityTimer();
     var entity = _mController.getCurrentEntity();
 
@@ -96,6 +113,20 @@ class EntityListDelegate extends Ui.BehaviorDelegate {
     }
 
     return true;
+  }
+
+  // Deferring to false lets BehaviorDelegate fall back to onKey() (physical
+  // Enter button) or onTap() (touch) below, which is what actually toggles
+  // the entity. Returning true here would suppress both of those calls.
+  function onSelect() {
+    return false;
+  }
+
+  function onKey(keyEvent) {
+    if (keyEvent.getKey() == Ui.KEY_ENTER) {
+      return toggleCurrentEntity();
+    }
+    return false;
   }
 
   function onHold(clickEvent) {
@@ -148,11 +179,37 @@ class EntityListDelegate extends Ui.BehaviorDelegate {
   }
 
   // Touch screen: explicit tap handler.
-  // BehaviorDelegate translates onTap → onSelect on most watches, but some
-  // models fire onTap (InputDelegate) directly without the translation.
-  // Overriding here guarantees toggling works on all touch watches.
+  // onSelect() returns false so BehaviorDelegate calls this InputDelegate-
+  // level function instead, giving us the tap coordinates onSelect() lacks.
+  //
+  // In EntityListView's 3-row layout, a tap is routed to whichever row (the
+  // previous, current, or next entity) it landed in: tapping the upper or
+  // lower row brings that entity to the center and triggers it, same as
+  // tapping the center row does. EntityCardView has no rows (getRowHeight()
+  // is null there), so it always falls back to toggling the current entity.
   function onTap(clickEvent) {
-    return onSelect();
+    var rowHeight = _mController.getRowHeight();
+    if (rowHeight == null || rowHeight <= 0) {
+      return toggleCurrentEntity();
+    }
+
+    var row = (clickEvent.getCoordinates()[1] / rowHeight).toNumber();
+    if (row < 0) { row = 0; }
+    if (row > 2) { row = 2; }
+
+    if (row == 1) {
+      return toggleCurrentEntity();
+    }
+
+    var index = _mController.getIndex() + (row == 0 ? -1 : 1);
+    if (_mController.getEntityAt(index) == null) {
+      return true; // Tapped an empty row (no previous/next entity); ignore.
+    }
+
+    _mController.setIndex(index);
+    Ui.requestUpdate();
+
+    return toggleCurrentEntity();
   }
 
   // Touch screen: explicit swipe handler.
@@ -701,6 +758,7 @@ class EntityListView extends Ui.View {
     var currentIndex = _mController.getIndex();
     var visibleRows = 3;
     var rowHeight = vh / visibleRows;
+    _mController.setRowHeight(rowHeight);
 
     for (var i = 0; i < visibleRows; i++) {
       var entityIndex = currentIndex - 1 + i;
