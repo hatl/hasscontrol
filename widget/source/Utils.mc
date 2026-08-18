@@ -376,6 +376,24 @@ module Utils {
     return null;
   }
 
+  // True when the device exposes Dc.drawBitmap2() (needed for :tintColor).
+  // Some devices - e.g. Instinct 3 Solar (MIP) - do not implement it at all;
+  // calling it there throws a "Symbol Not Found Error" at runtime, which
+  // cannot be caught reliably because the symbol lookup fails before the
+  // method executes.
+  //
+  // The check is done on the Dc instance (`dc has :drawBitmap2`) instead of
+  // `Graphics.Dc has :drawBitmap2`, because resolving the bare `Graphics`
+  // module symbol itself throws "Symbol Not Found Error" on those devices.
+  var _hasDrawBitmap2 = null;
+
+  function supportsDrawBitmap2(dc) {
+    if (_hasDrawBitmap2 == null) {
+      _hasDrawBitmap2 = dc has :drawBitmap2;
+    }
+    return _hasDrawBitmap2;
+  }
+
   // Draws an entity icon, tinting it to `tintColor` when one is given.
   // Dc.drawBitmap2()'s :tintColor option requires the source bitmap to be in
   // native color format; drawables.xml sets automaticPalette="false" on
@@ -383,8 +401,11 @@ module Utils {
   // so a misconfigured or future icon degrades to an untinted draw instead
   // of crashing the app (this previously threw an unhandled "Source must be
   // native color format" exception on some color devices).
+  //
+  // On devices without Dc.drawBitmap2 (e.g. Instinct 3 Solar) the icon is
+  // drawn untinted.
   function drawIcon(dc, x, y, drawable, tintColor) {
-    if (tintColor != null) {
+    if (tintColor != null && supportsDrawBitmap2(dc)) {
       try {
         dc.drawBitmap2(x, y, drawable, {:tintColor => tintColor});
         return;
