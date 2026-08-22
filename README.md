@@ -16,6 +16,7 @@ Please read through the instructions below, I will try to guide you through the 
   - [Prerequisites](#prerequisites)
   - [Supported entity types](#supported-entity-types)
   - [Custom icons](#custom-icons)
+  - [Low-memory devices](#low-memory-devices)
   - [Installation](#installation)
   - [Configuration](#configuration)
     - [Basic Settings](#basic-settings)
@@ -32,6 +33,9 @@ Please read through the instructions below, I will try to guide you through the 
     - [Error message: "Check settings, invalid url"](#error-message-check-settings-invalid-url)
     - [Some entities from my group are missing in my Garmin device](#some-entities-from-my-group-are-missing-in-my-garmin-device)
     - [Changed entity state doesn't show immediately in HassControl](#changed-entity-state-doesnt-show-immediately-in-hasscontrol)
+    - [Error message: "Group too large for this watch"](#error-message-group-too-large-for-this-watch)
+    - [Error message: "Low memory: only N of M entities loaded"](#error-message-low-memory-only-n-of-m-entities-loaded)
+    - [My watch has no "List View" option, or ignores custom icons](#my-watch-has-no-list-view-option-or-ignores-custom-icons)
 
 
 ### Prerequisites
@@ -80,11 +84,53 @@ movie_mode:
 
 Set icons are matched against a bundled subset of MDI (lights, plugs, media, climate,
 covers/blinds, security, weather, appliances, and more — see `getMdiMap()` in
-`widget/source/Entities/EntityListView.mc`). An entity whose icon isn't in the bundled
+`widget/source/Utils.mc`). An entity whose icon isn't in the bundled
 set simply falls back to the default type/state icon, so nothing breaks.
+
+If an entity has no custom icon but does have a `device_class` (for example `battery`,
+`temperature` or `door`), HassControl uses the icon Home Assistant's own UI would show
+for that class before falling back to the type/state icon.
 
 To add another icon: drop a 60×60 white-on-transparent PNG in `widget/resources/drawables/`,
 register it in `drawables.xml`, and map the `mdi:*` name(s) to it in `getMdiMap()`.
+
+***Note:*** *Custom icons are not available on [low-memory devices](#low-memory-devices).*
+
+### Low-memory devices
+
+Some older watches give a widget only **64 KB of memory** — for everything: the app's own
+code, all entity data, and every network response. As HassControl grew, the full feature
+set stopped fitting, and the widget ran out of memory on these devices.
+
+To keep them working, HassControl is built with a reduced feature set for the watches
+listed below. Everything else — scenes, all supported entity types, group sync, colored
+icons, battery reporting, header authentication — works exactly as documented.
+
+| Affected watches |
+|------------------|
+| Descent G1 / G1 Solar · Enduro · fēnix 5 · fēnix 5S · fēnix 6 / 6S (incl. Solar and Dual Power) · fēnix Chronos · Forerunner 55 / 245 / 645 / 935 · Instinct 2 / 2S / 2X Solar (incl. Solar, Dual Power, dēzl Edition) · Instinct Crossover · Venu Sq · vívoactive 3 |
+
+**What is different on these watches:**
+
+- **[Custom icons](#custom-icons) are not available.** Entities always use the icon for
+  their type and state. The `icon:` and `device_class` attributes are ignored.
+- **Only the classic card view is available.** The 3-row list view is not built for these
+  watches, so the `List View` entry is absent from the watch menu and the
+  `Use list view style` setting in the ConnectIQ app has no effect. See [Display](#display).
+
+**Safeguards.** Even with the reduced feature set, a large Home Assistant group can exceed
+what these watches can hold. Rather than crashing, HassControl now stops and tells you:
+
+- Importing stops early with `Low memory: only N of M entities loaded`.
+- If the group response itself is too large to receive, you get `Group too large for this watch`.
+- A state refresh that runs low on memory stops early; the remaining entities keep their
+  last known state and are updated the next time you open the widget.
+
+In all three cases the fix is the same: put fewer entities in your group. See the
+[FAQ](#faq) entries below.
+
+***Note for other watches:*** *newer devices have 512 KB or more and are unaffected — they
+get the complete feature set.*
 
 ### Installation
 The easiest way to install the app is to download and install the [ConnectIQ app](https://support.garmin.com/en-US/?faq=mmm2rz2WBI3zbdFQYdiwX8) from Garmin on your smartphone.
@@ -125,6 +171,8 @@ This setting can be changed in two places, and both stay in sync:
 
 - In the **ConnectIQ app** on your phone: open the widget settings and toggle `Use list view style`.
 - On the **watch**: open the widget menu, go to `Settings`, and toggle `List View` (`3-row list` / `Classic card`). The change is applied immediately and persisted to the app settings.
+
+***Note:*** *On [low-memory devices](#low-memory-devices) only the classic card view is available; the `List View` menu entry is absent and this setting has no effect there.*
 
 **Colored icons**: State icons are tinted to match Home Assistant's default state colors, so you can tell an entity's state at a glance. This works in both the list view and the classic view.
 
@@ -232,6 +280,8 @@ Once that is done, all entities added to that group in Home Assistant and suppor
 
 If you done some modification to the group in Home Assistant, you can at any time repeat this procedure to add, update or remove entities from your watch.
 
+***Note:*** *On [low-memory devices](#low-memory-devices) the number of entities a group may contain is limited by the watch's memory. If your group is too large you will be told during the import rather than getting a crash — see the [FAQ](#faq).*
+
 ### Navigation & Controls
 
 The widget is designed to be as simple as possible, but there are a few things to keep in mind.
@@ -311,4 +361,17 @@ Not all Home Assistant entity types are currently supported by HassControl, you 
 There is a rare occasion when someone changes state of an entity (for example turns the light on), while you are actively using this widget. In this case its state in your Garmin device will not correspond to its actual one. It has to be synced again. There are three option how to sync it. You either toggle it's state, select `Refresh entities` in `Settings` or reopen the widget (the state of all your entities is automatically received from Home Assistant every time you start the widget).
 
 ***Note***: *Because after predefined timeout period every widget is automatically closed, you should never experience this type of data discrepancy.*
+
+#### Error message: "Group too large for this watch"
+Your watch is one of the [low-memory devices](#low-memory-devices) and the group you are importing has more entities than it can receive — the response could not even be read into memory.
+
+Remove entities from the group in Home Assistant until the import succeeds. A group of roughly a dozen entities is a realistic target on these watches; the exact number depends on how long your entity ids and names are.
+
+#### Error message: "Low memory: only N of M entities loaded"
+The group was received, but your watch ran out of room while creating the entities, so HassControl imported the first N and stopped. The N that were imported work normally.
+
+This is a deliberate safeguard on [low-memory devices](#low-memory-devices) — the alternative was the widget crashing mid-import. Shrink the group in Home Assistant to the number your watch reports it managed, then run `Refresh entities` again.
+
+#### My watch has no "List View" option, or ignores custom icons
+Your watch is one of the [low-memory devices](#low-memory-devices). The 3-row list view and the Home Assistant `icon:` / `device_class` icons are not built for those watches, because the memory they need is memory those watches don't have. Everything else works normally.
 
