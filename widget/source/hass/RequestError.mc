@@ -1,5 +1,6 @@
 using Toybox.WatchUi as Ui;
 using Toybox.System;
+using Toybox.Communications as Comm;
 
 (:glance)
 module Hass {
@@ -23,6 +24,16 @@ module Hass {
             if (resCode == 404) {
                 code = ERROR_NOT_FOUND;
                 message = Rez.Strings.Error_Request_NotFound;
+                return;
+            }
+
+            // The system could not parse the response into the app's heap.
+            // On a 64 KB widget device that means the Home Assistant group has
+            // more members than the watch can hold - a real limit the user can
+            // act on, not the "Unknown error, code=-403" it showed before.
+            if (resCode == Comm.NETWORK_RESPONSE_OUT_OF_MEMORY) {
+                code = ERROR_OUT_OF_MEMORY;
+                message = Rez.Strings.Error_Request_OutOfMemory;
                 return;
             }
 

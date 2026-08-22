@@ -82,16 +82,7 @@ class MenuController {
             MenuController.MENU_SELECT_START_VIEW,
             {}
         ));
-        menu.addItem(new Ui.ToggleMenuItem(
-            "List View",
-            {
-                :enabled => "3-row list",
-                :disabled => "Classic card"
-            },
-            MenuController.MENU_TOGGLE_LIST_VIEW,
-            App.getApp().viewController.useListEntityView(),
-            {}
-        ));
+        addListViewToggle(menu);
         menu.addItem(new Ui.MenuItem(
             "Refresh entities",
             Hass.getGroup(),
@@ -106,6 +97,26 @@ class MenuController {
         ));
 
         Ui.pushView(menu, _delegate, Ui.SLIDE_IMMEDIATE);
+    }
+
+    // The list/card style switch. Omitted on 64 KB widget devices, where
+    // EntityListView is not compiled in (see monkey.jungle).
+    (:fullmem)
+    hidden function addListViewToggle(menu) {
+        menu.addItem(new Ui.ToggleMenuItem(
+            "List View",
+            {
+                :enabled => "3-row list",
+                :disabled => "Classic card"
+            },
+            MenuController.MENU_TOGGLE_LIST_VIEW,
+            App.getApp().viewController.useListEntityView(),
+            {}
+        ));
+    }
+
+    (:lowmem)
+    hidden function addListViewToggle(menu) {
     }
 
     function showSelectStartViewMenu() {

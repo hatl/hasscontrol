@@ -4,6 +4,7 @@ using Toybox.WatchUi as Ui;
 using Toybox.Timer;
 using Toybox.System;
 using Hass;
+using Utils;
 
 
 class HassControlApp extends App.AppBase {
@@ -128,15 +129,22 @@ class HassControlApp extends App.AppBase {
 
   // Return the initial view of your application here
   function getInitialView() {
+    Utils.logMem("init:0 enter", null);
     viewController = new ViewController();
+    Utils.logMem("init:1 viewController", null);
     menu = new MenuController();
+    Utils.logMem("init:2 menu", null);
 
     Hass.initClient();
+    Utils.logMem("init:3 client", null);
     Hass.loadStoredEntities();
+    Utils.logMem("init:4 stored n", Hass.getEntities().size());
     Hass.loadScenesFromSettings();
+    Utils.logMem("init:5 scenes n", Hass.getEntities().size());
 
     if (isLoggedIn()) {
       Hass.refreshAllEntities(true);
+      Utils.logMem("init:6 refreshStarted", null);
     }
 
     var deviceSettings = System.getDeviceSettings();
@@ -177,6 +185,8 @@ class HassControlApp extends App.AppBase {
 
     // Start inactivity timer if configured
     resetInactivityTimer();
+
+    Utils.logMem("init:7 done", null);
 
     return [
       view,

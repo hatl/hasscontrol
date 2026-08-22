@@ -17,13 +17,44 @@ class ViewController {
   hidden var _sceneController;
 
   function initialize() {
-    _loaderView = new ProgressView();
-    _errorView = new ErrorView();
-    _errorDelegate = new ErrorDelegate();
-    _loginView = new LoginView();
-    _loginDelegate = new LoginDelegate();
     _loaderActive = null;
     _loaderTimer = new Timer.Timer();
+  }
+
+  // The progress, error and login views are built on first use. Allocating all
+  // five eagerly cost 1360 bytes - measured at startup on Instinct 2X, where
+  // the whole heap is about 11 KB - and a session that neither errors nor logs
+  // in never needs four of them.
+  hidden function loaderView() {
+    if (_loaderView == null) {
+      _loaderView = new ProgressView();
+    }
+    return _loaderView;
+  }
+
+  hidden function errorView() {
+    if (_errorView == null) {
+      _errorView = new ErrorView();
+      _errorDelegate = new ErrorDelegate();
+    }
+    return _errorView;
+  }
+
+  hidden function loginView() {
+    if (_loginView == null) {
+      _loginView = new LoginView();
+      _loginDelegate = new LoginDelegate();
+    }
+    return _loginView;
+  }
+
+  // Null-safe: a view that was never built cannot be on screen.
+  hidden function isErrorActive() {
+    return _errorView != null && _errorView.isActive();
+  }
+
+  hidden function isLoginActive() {
+    return _loginView != null && _loginView.isActive();
   }
 
 
@@ -35,7 +66,7 @@ class ViewController {
   // Since the progress bar is not a normal view,
   // We need to work around that it doesnt have onHide and onShow
   function isShowingLoader() {
-    return _loaderActive != null && !_errorView.isActive() && !_loginView.isActive();
+    return _loaderActive != null && !isErrorActive() && !isLoginActive();
   }
 
   // Returns true when the "useListView" setting is enabled, selecting the
@@ -61,6 +92,7 @@ class ViewController {
 
   // Builds the [view, delegate] pair for the given entity types, honoring the
   // "useListView" setting: EntityListView (list) or EntityCardView (classic).
+  (:fullmem)
   hidden function buildEntityView(types) {
     var controller = new EntityListController(types);
     var view = useListEntityView()
@@ -69,6 +101,18 @@ class ViewController {
 
     return [
       view,
+      new EntityListDelegate(controller)
+    ];
+  }
+
+  // Lean build (64 KB widget devices): EntityListView is not compiled in, so
+  // the classic card is the only style available and "useListView" is ignored.
+  (:lowmem)
+  hidden function buildEntityView(types) {
+    var controller = new EntityListController(types);
+
+    return [
+      new EntityCardView(controller),
       new EntityListDelegate(controller)
     ];
   }
@@ -183,13 +227,13 @@ class ViewController {
 
   function showLoginView(show) {
     System.println("Show login? " + show);
-    if (!_loginView.isActive() && show == true) {
-      Ui.pushView(_loginView, _loginDelegate, Ui.SLIDE_IMMEDIATE);
+    if (!isLoginActive() && show == true) {
+      Ui.pushView(loginView(), _loginDelegate, Ui.SLIDE_IMMEDIATE);
 
       Ui.requestUpdate();
     }
 
-    if (_loginView.isActive() && show == false) {
+    if (isLoginActive() && show == false) {
       Ui.popView(Ui.SLIDE_IMMEDIATE);
 
       Ui.requestUpdate();
@@ -202,7 +246,7 @@ class ViewController {
       Ui.popView(Ui.SLIDE_IMMEDIATE);
     }
 
-    _loaderView.setDisplayString(text);
+    loaderView().setDisplayString(text);
 
     Ui.pushView(_loaderView, null, Ui.SLIDE_BLINK);
 
@@ -262,11 +306,11 @@ class ViewController {
       message = error;
     }
 
-    if (_errorView.isActive()) {
+    if (isErrorActive()) {
       Ui.popView(Ui.SLIDE_IMMEDIATE);
     }
 
-    _errorView.setMessage(message);
+    errorView().setMessage(message);
 
     Ui.pushView(_errorView, _errorDelegate, Ui.SLIDE_IMMEDIATE);
 
@@ -275,7 +319,7 @@ class ViewController {
   }
 
   function removeError() {
-    if (_errorView.isActive()) {
+    if (isErrorActive()) {
       Ui.popView(Ui.SLIDE_IMMEDIATE);
     }
   }

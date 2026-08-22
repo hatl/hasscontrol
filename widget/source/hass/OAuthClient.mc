@@ -2,6 +2,7 @@ using Toybox.Communications as Comm;
 using Toybox.Application as App;
 using Toybox.StringUtil;
 using Toybox.Time;
+using Utils;
 
 (:glance)
 module Hass {
@@ -65,13 +66,22 @@ module Hass {
             _tokenCallbacks.remove(callbackObject);
         }
 
+        // Fires every queued callback exactly once and drops the queue.
+        //
+        // Removing entry i inside a `for (i++)` loop skipped the next entry and
+        // left it in _tokenCallbacks forever - together with its context (url,
+        // parameters, options), which is the request that was never sent. Every
+        // token refresh that had more than one request queued leaked one entry
+        // and fired a stale request on the following refresh.
+        //
+        // Detaching the list first is also what makes re-entrancy safe: a
+        // callback that issues a new request appends to the fresh queue.
         function fireTokenCallbacks(error) {
-            for( var i = 0; i < _tokenCallbacks.size(); i++ ) {
-                var callbackObject = _tokenCallbacks[i];
+            var callbacks = _tokenCallbacks;
+            _tokenCallbacks = new [0];
 
-                callbackObject["callback"].invoke(error, callbackObject["context"]);
-
-                removeTokenCallback(callbackObject);
+            for (var i = 0; i < callbacks.size(); i++) {
+                callbacks[i]["callback"].invoke(error, callbacks[i]["context"]);
             }
         }
 
@@ -252,7 +262,10 @@ module Hass {
                 }
             }
 
-            System.println(context);
+            // Was System.println(context): stringifying the nested context
+            // dictionary allocated a multi-hundred-byte String on every single
+            // response - in release builds too - at the moment heap is tightest.
+            Utils.logMem("onWebResponse code", responseCode);
 
             context[:responseCallback].invoke(error, {
                 :responseCode => responseCode,

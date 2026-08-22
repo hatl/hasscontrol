@@ -1,2 +1,36 @@
 project.manifest = manifest.xml
 project.typecheck = 0
+
+# ── Low-memory feature stripping ─────────────────────────────────────────────
+# Devices whose *widget* memory limit is 64 KB cannot hold the full feature set:
+# code+data alone occupies ~53 KB of the 64 KB budget, leaving too little heap
+# for entities, HTTP responses and bitmaps (the app OOMs at runtime).
+#
+# Two build annotations select between a full and a lean implementation:
+#   :fullmem — compiled everywhere except the 64 KB devices
+#   :lowmem  — compiled ONLY on the 64 KB devices
+#
+# What the lean build drops (see Utils.mc / ViewController.mc / MenuController.mc):
+#   * the mdi:* and device_class icon lookup tables  (~9.8 KB)
+#   * EntityListView, leaving the classic EntityCardView (~4.1 KB)
+#
+# Verify with:  monkeyc ... -d instinct2x --build-stats 1 -r -O2
+base.excludeAnnotations = lowmem
+
+descentg1.excludeAnnotations = fullmem
+enduro.excludeAnnotations = fullmem
+fenix5.excludeAnnotations = fullmem
+fenix5s.excludeAnnotations = fullmem
+fenix6.excludeAnnotations = fullmem
+fenix6s.excludeAnnotations = fullmem
+fenixchronos.excludeAnnotations = fullmem
+fr245.excludeAnnotations = fullmem
+fr55.excludeAnnotations = fullmem
+fr645.excludeAnnotations = fullmem
+fr935.excludeAnnotations = fullmem
+instinct2.excludeAnnotations = fullmem
+instinct2s.excludeAnnotations = fullmem
+instinct2x.excludeAnnotations = fullmem
+instinctcrossover.excludeAnnotations = fullmem
+venusq.excludeAnnotations = fullmem
+vivoactive3.excludeAnnotations = fullmem

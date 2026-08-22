@@ -230,6 +230,9 @@ class EntityListDelegate extends Ui.BehaviorDelegate {
   }
 }
 
+// The 3-row list style. Excluded on 64 KB widget devices (see monkey.jungle);
+// those build only EntityCardView, which is what "useListView" defaults to.
+(:fullmem)
 class EntityListView extends Ui.View {
   hidden var _mController;
   hidden var _mLastIndex;
@@ -773,5 +776,7 @@ class EntityListView extends Ui.View {
     if (_mShowBar) {
       drawPageBar(dc);
     }
+
+    Utils.logMem("list:onUpdate icons", _mIconCache.size());
   }
 }

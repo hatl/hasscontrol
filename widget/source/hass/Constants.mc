@@ -51,7 +51,8 @@ module Hass {
         ERROR_SERVER_NOT_REACHABLE,
         ERROR_NOT_FOUND,
         ERROR_NOT_AUTHORIZED,
-        ERROR_INVALID_URL
+        ERROR_INVALID_URL,
+        ERROR_OUT_OF_MEMORY
     }
 
     enum {

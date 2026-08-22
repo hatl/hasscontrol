@@ -94,8 +94,15 @@ module Utils {
   // Module-level so it is shared by both the list and the classic entity views.
   // Built once on first use. Unmapped icons fall through to type/state selection.
   // Extend by adding a bitmap in drawables.xml and mapping the mdi name(s) here.
+  //
+  // Excluded on 64 KB widget devices (:fullmem, see monkey.jungle): the two
+  // tables below cost ~9.8 KB of code+data - 15% of the whole budget - because
+  // every entry is a string literal plus a dictionary-insert instruction, and
+  // the built dictionary then stays on the heap for the app's lifetime.
+  (:fullmem)
   var _mdiMap = null;
 
+  (:fullmem)
   function getMdiMap() {
     if (_mdiMap == null) {
       _mdiMap = {
@@ -275,8 +282,10 @@ module Utils {
   // Assistant derives these icons from the device class in its own UI but does
   // not send them in the `icon` attribute. Only device classes with a matching
   // bundled glyph are listed; extend alongside getMdiMap().
+  (:fullmem)
   var _deviceClassMap = null;
 
+  (:fullmem)
   function getDeviceClassMap() {
     if (_deviceClassMap == null) {
       _deviceClassMap = {
@@ -316,6 +325,7 @@ module Utils {
   //   1. the explicit Home Assistant `icon` attribute (mdi:*), then
   //   2. the entity's `device_class` (the icon HA's own UI would show), then
   //   3. null — callers fall back to the type/state icon.
+  (:fullmem)
   function getMdiIconDrawable(entity) {
     var icon = entity.getIcon();
 
@@ -335,6 +345,13 @@ module Utils {
       }
     }
 
+    return null;
+  }
+
+  // Lean build (64 KB widget devices): no bundled mdi:*/device_class glyphs,
+  // so every entity falls straight through to its type/state icon.
+  (:lowmem)
+  function getMdiIconDrawable(entity) {
     return null;
   }
 
@@ -414,6 +431,34 @@ module Utils {
       }
     }
     dc.drawBitmap(x, y, drawable);
+  }
+
+  // Bytes of heap still available. The Connect IQ VM collects garbage when an
+  // allocation cannot be satisfied, so this is a floor, not an exact figure -
+  // but it is the only runtime signal there is, and it is what the low-memory
+  // guards in Hass use to stop allocating before the VM throws.
+  function freeMemory() {
+    return System.getSystemStats().freeMemory;
+  }
+
+  // Prints the app's heap usage. Debug builds only - the :debug/:release pair
+  // is stripped automatically, so call sites cost nothing in a release build.
+  // The budget shown by `monkeyc --build-stats` is code+data; whatever is left
+  // of the device's app-type memory limit is what these numbers move within.
+  //
+  // `tag` must stay a plain literal and any varying part must be passed as
+  // `value`: arguments are evaluated at the call site, so building the label
+  // with `+` there would allocate a String in release builds too - exactly the
+  // kind of allocation this is here to find.
+  (:debug)
+  function logMem(tag, value) {
+    var s = System.getSystemStats();
+    var label = value == null ? tag : tag + "=" + value;
+    System.println("MEM " + label + " used=" + s.usedMemory + " free=" + s.freeMemory + " total=" + s.totalMemory);
+  }
+
+  (:release)
+  function logMem(tag, value) {
   }
 
   (:glance)

@@ -3,6 +3,50 @@ using Toybox.System;
 
 module Hass {
   class Entity {
+    // Persisted form: this many flat slots per entity, laid end to end in one
+    // Array - see writeToStorage()/createFromStorage(). Entities used to be
+    // stored as one seven-key Dictionary each; serialising 13 of those blew
+    // past the free-heap floor and crashed inside App.Storage.setValue() on
+    // Instinct 2X. A Dictionary carries its hash table and per-entry objects,
+    // a flat Array is one allocation of plain slots.
+    //
+    // `ext` is deliberately not persisted: external (settings-defined)
+    // entities are never written, so it is always false on read.
+    static const STORED_FIELDS = 6;
+
+    // Appends this entity at `offset` and returns the next free offset.
+    function writeToStorage(target, offset) {
+      target[offset]     = _mId;
+      target[offset + 1] = _mName;
+      target[offset + 2] = Entity.stateToString(_mState);
+      target[offset + 3] = _mSensorClass;
+      target[offset + 4] = _mIcon;
+      target[offset + 5] = _mDeviceClass;
+
+      return offset + Entity.STORED_FIELDS;
+    }
+
+    static function createFromStorage(stored, offset) {
+      var id = stored[offset];
+
+      if (id == null) {
+        return null;
+      }
+
+      var name = stored[offset + 1];
+
+      return new Entity({
+        :id => id,
+        :name => name != null ? name : id,
+        :state => stored[offset + 2],
+        :sensorClass => stored[offset + 3],
+        :icon => stored[offset + 4],
+        :deviceClass => stored[offset + 5]
+      });
+    }
+
+    // Reads the pre-2.0.4 storage format. Only used by the one-time migration
+    // in Hass.loadStoredEntities().
     static function createFromDict(dict) {
       // Null safety: check for null or invalid dictionary
       if (dict == null) {
@@ -256,20 +300,5 @@ module Hass {
       _mExt = isExternal;
     }
 
-    function toDict() {
-      return {
-        "id" => _mId,
-        "name" => _mName,
-        "state" => Entity.stateToString(_mState),
-        "ext" => _mExt,
-        "sensorClass" => _mSensorClass,
-        "icon" => _mIcon,
-        "deviceClass" => _mDeviceClass,
-      };
-    }
-
-    function toString() {
-      return toDict().toString();
-    }
   }
 }

@@ -14,6 +14,7 @@
     <string id="Error_Request_InvalidUrl">Check settings, invalid url</string>
     <string id="Error_Request_NotFound">Resource not found</string>
     <string id="Error_Request_NotAuthorized">Authentication failed</string>
+    <string id="Error_Request_OutOfMemory">Group too large\nfor this watch</string>
 
     <string id="Error_Auth_NotReachable">Server not reachable</string>
     <string id="Error_Auth_Revoked">Login Revoked</string>

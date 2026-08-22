@@ -318,8 +318,10 @@ class EntityCardView extends Ui.View {
 
     shouldShowBar();
 
+    Utils.logMem("card:beforeDraw", null);
     drawEntityText(dc, entity);
     drawIcon(dc, entity);
+    Utils.logMem("card:afterDraw", null);
 
     if (_mShowBar) {
       drawPageBar(dc);

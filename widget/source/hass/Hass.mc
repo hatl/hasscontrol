@@ -7,14 +7,25 @@ using Toybox.Lang;
 using Utils;
 
 module Hass {
-  const STORAGE_KEY = "Hass/entities";
+  const STORAGE_KEY = "Hass/entities/v2";
+  const STORAGE_KEY_LEGACY = "Hass/entities";
 
   var client = null;
   var _entities = new [0];
   var _entitiesToRefresh = new [0];
   var _transitionalEntities =  new [0];
   var _continueRefreshOnError = false;
+  var _refreshActive = false;
   var _refreshTimer = new Timer.Timer();
+  var _finalizeTimer = new Timer.Timer();
+  var _pendingImportIds = null;
+
+  // Free-heap floor, in bytes. Below this we stop allocating rather than let
+  // the VM throw Out Of Memory. Measured on Instinct 2X (64 KB widget budget):
+  // parsing one entity's HTTP response costs ~2.0 KB and a 12-member group
+  // response ~2.4 KB, so a request issued with less than this free cannot
+  // complete. Bigger devices never come near it.
+  const MIN_FREE_MEMORY = 3500;
 
   function initClient() {
     client = new Client();
@@ -73,16 +84,39 @@ module Hass {
   }
 
   function storeEntities() {
-    var entities = new [0];
+    Utils.logMem("storeEntities:enter", null);
+
+    // Serialising every entity briefly doubles the entity data. Skipping the
+    // write costs only the offline cache for this session - far better than an
+    // Out Of Memory crash at the end of an otherwise successful refresh.
+    if (Utils.freeMemory() < MIN_FREE_MEMORY) {
+      System.println("storeEntities: skipped, low memory");
+      return;
+    }
+
+    // Size the array up front: growing it with add() would reallocate and copy
+    // repeatedly, which is its own peak on a device with a few KB to spare.
+    var count = 0;
+
+    for (var i = 0; i < _entities.size(); i++) {
+      if (!_entities[i].isExternal()) {
+        count++;
+      }
+    }
+
+    var stored = new [count * Entity.STORED_FIELDS];
+    var slot = 0;
 
     for (var i = 0; i < _entities.size(); i++) {
       if (_entities[i].isExternal()) {
         continue;
       }
-      entities.add(_entities[i].toDict());
+      slot = _entities[i].writeToStorage(stored, slot);
     }
 
-    App.Storage.setValue(STORAGE_KEY, entities);
+    Utils.logMem("storeEntities:built n", count);
+    App.Storage.setValue(STORAGE_KEY, stored);
+    Utils.logMem("storeEntities:done", null);
   }
 
   function loadScenesFromSettings() {
@@ -137,23 +171,19 @@ module Hass {
   }
 
   function loadStoredEntities() {
-    var entities = App.Storage.getValue(STORAGE_KEY);
-
     _entities = new [0];
 
-    if (entities == null) {
-      System.println("loadStoredEntities: no stored entities found");
-      return;
-    }
+    var stored = App.Storage.getValue(STORAGE_KEY);
 
-    System.println("loadStoredEntities: loading " + entities.size() + " entities from storage");
-    for (var i = 0; i < entities.size(); i++) {
-      var entity = Entity.createFromDict(entities[i]);
-      // Filter out null entities (from corrupted or invalid data)
-      if (entity != null) {
-        _entities.add(entity);
-      } else {
-        System.println("loadStoredEntities: skipped null entity at index " + i);
+    if (stored == null) {
+      _loadLegacyStoredEntities();
+    } else {
+      for (var i = 0; i + Entity.STORED_FIELDS <= stored.size(); i += Entity.STORED_FIELDS) {
+        var entity = Entity.createFromStorage(stored, i);
+        // Filter out null entities (from corrupted or invalid data)
+        if (entity != null) {
+          _entities.add(entity);
+        }
       }
     }
 
@@ -162,7 +192,28 @@ module Hass {
     System.println("Loaded entities: " + _entities.size() + " total");
   }
 
+  // One-time read of the pre-2.0.4 format (one Dictionary per entity). The
+  // next storeEntities() writes the compact form, so the old key is dropped
+  // here rather than kept in sync.
+  function _loadLegacyStoredEntities() {
+    var stored = App.Storage.getValue(STORAGE_KEY_LEGACY);
+
+    if (stored == null) {
+      return;
+    }
+
+    for (var i = 0; i < stored.size(); i++) {
+      var entity = Entity.createFromDict(stored[i]);
+      if (entity != null) {
+        _entities.add(entity);
+      }
+    }
+
+    App.Storage.deleteValue(STORAGE_KEY_LEGACY);
+  }
+
   function _onReceiveEntity(err, data) {
+    Utils.logMem("onReceiveEntity queue", _entitiesToRefresh.size());
     if (err != null) {
       if (data != null && data[:context] != null && data[:context][:callback] != null) {
         data[:context][:callback].invoke(err, null);
@@ -260,15 +311,27 @@ module Hass {
       entity.setSensorClass(sensorClass);
     }
 
-    // Reflect the current icon attribute (null clears a previously stored icon).
-    entity.setIcon(icon);
-
-    // Reflect the current device_class (null clears a previously stored value).
-    entity.setDeviceClass(deviceClass);
+    _applyIconAttributes(entity, icon, deviceClass);
 
     if (data[:context] != null && data[:context][:callback] != null) {
       data[:context][:callback].invoke(null, entity);
     }
+  }
+
+  // Reflects the current icon / device_class attributes (null clears a
+  // previously stored value).
+  (:fullmem)
+  function _applyIconAttributes(entity, icon, deviceClass) {
+    entity.setIcon(icon);
+    entity.setDeviceClass(deviceClass);
+  }
+
+  // Lean build: Utils.getMdiIconDrawable() always returns null there, so
+  // nothing reads these. Not storing them keeps every entity's icon string
+  // (e.g. "mdi:television-classic") out of the heap for the app's lifetime,
+  // and out of the dictionary storeEntities() serialises.
+  (:lowmem)
+  function _applyIconAttributes(entity, icon, deviceClass) {
   }
 
   function refreshEntity(entity, callback) {
@@ -284,6 +347,7 @@ module Hass {
 
   function _refreshPendingEntities(error, noop) {
     if (error != null && !_continueRefreshOnError) {
+      _refreshActive = false;
       App.getApp().viewController.removeLoader();
       App.getApp().viewController.showError(error);
 
@@ -302,6 +366,14 @@ module Hass {
       _refreshTimer.start(Utils.method(Hass, :_refreshTransitionalEntities), 2000, false);
     }
 
+    if (_entitiesToRefresh.size() > 0 && Utils.freeMemory() < MIN_FREE_MEMORY) {
+      // Not enough heap left to parse another response. Abandon the rest of
+      // the chain; those entities keep their last known state instead of the
+      // whole app dying mid-refresh.
+      System.println("refresh: stopped early, low memory, " + _entitiesToRefresh.size() + " left");
+      _entitiesToRefresh = new [0];
+    }
+
     if (_entitiesToRefresh.size() > 0) {
       var entity = _entitiesToRefresh[0];
 
@@ -315,19 +387,63 @@ module Hass {
         _refreshPendingEntities(null, null);
       }
     } else {
-      // We need to finalize with reading the scenes from settings again,
-      // so that the name config takes precedence
-      loadScenesFromSettings();
+      _refreshActive = false;
 
-      storeEntities();
-
-      Ui.requestUpdate();
-
-      App.getApp().viewController.removeLoader();
+      // Finish on a fresh stack rather than inline. This branch runs inside
+      // OAuthClient.onWebResponse(), whose frame still holds the last parsed
+      // response body - a couple of KB. Serialising every entity for storage
+      // while that response is still live is the peak that runs a 64 KB device
+      // out of memory at the end of a group import.
+      _scheduleDeferred();
     }
   }
 
+  // Defers work that must not run on an HTTP response's stack, where the
+  // parsed body is still live. By the time the timer fires, onWebResponse()
+  // has returned and the response is collectable.
+  function _scheduleDeferred() {
+    _finalizeTimer.start(Utils.method(Hass, :_runDeferred), 50, false);
+  }
+
+  // One timer serves both deferred jobs. A pending import wins: it ends by
+  // starting a refresh, which schedules the finalize again afterwards.
+  function _runDeferred() {
+    if (_pendingImportIds != null) {
+      _buildImportedEntities();
+      return;
+    }
+
+    _finishRefresh();
+  }
+
+  // Tail of a completed refresh chain. Runs from a timer so the HTTP response
+  // that triggered it has already been released.
+  function _finishRefresh() {
+    Utils.logMem("finishRefresh:enter", null);
+
+    // We need to finalize with reading the scenes from settings again,
+    // so that the name config takes precedence
+    loadScenesFromSettings();
+
+    storeEntities();
+
+    Ui.requestUpdate();
+
+    App.getApp().viewController.removeLoader();
+
+    Utils.logMem("finishRefresh:done", null);
+  }
+
   function refreshAllEntities(continueOnError) {
+    // App.getInitialView() and the entity view's onShow() both ask for a
+    // refresh at startup, which used to start two chains walking the same
+    // entity list: two requests in flight, two response buffers, two queues.
+    // On a 64 KB device that duplicate is a large slice of the free heap.
+    if (_refreshActive) {
+      return;
+    }
+    _refreshActive = true;
+
     _entitiesToRefresh = new [0];
     _continueRefreshOnError = continueOnError == true;
 
@@ -359,31 +475,81 @@ module Hass {
       return;
     }
 
-    var entities = data[:body]["attributes"]["entity_id"];
+    // Hold on to the id list only, then let the timer build the entities.
+    // Building them here would do it inside onWebResponse(), where the whole
+    // parsed group response is still live - 2.4 KB for a 12-member group,
+    // measured on Instinct 2X, against 1.6 KB of free heap. Keeping just the
+    // id array keeps the ids (which the entities reference anyway) and drops
+    // the rest of the response.
+    _pendingImportIds = data[:body]["attributes"]["entity_id"];
+    Utils.logMem("import:parsed n", _pendingImportIds.size());
 
-    _entities = new [0];
+    _scheduleDeferred();
+  }
 
-    for (var i = 0; i < entities.size(); i++) {
-      var entity = getEntity(entities[i]);
+  // Rebuilds _entities from the imported group. Runs from the deferred timer,
+  // so the group response has already been released.
+  function _buildImportedEntities() {
+    var ids = _pendingImportIds;
+    _pendingImportIds = null;
+
+    if (ids == null) {
+      return;
+    }
+
+    Utils.logMem("import:build:enter n", ids.size());
+
+    // Build against the *old* list so entities still in the group are reused.
+    // Clearing _entities first (as this did) made getEntity() search an empty
+    // list, so every re-import allocated a fresh Entity for every member.
+    var imported = new [0];
+    var dropped = 0;
+
+    for (var i = 0; i < ids.size(); i++) {
+      if (Utils.freeMemory() < MIN_FREE_MEMORY) {
+        dropped = ids.size() - i;
+        break;
+      }
+
+      var entity = getEntity(ids[i]);
 
       if (entity == null) {
-        _entities.add(new Entity({
-          :id => entities[i],
-          :name => entities[i],
+        entity = new Entity({
+          :id => ids[i],
+          :name => ids[i],
           :state => null,
           :sensorClass => null
-        }));
+        });
       } else {
         entity.setExternal(false);
       }
+
+      imported.add(entity);
     }
+
+    _entities = imported;
+    ids = null;
+
+    Utils.logMem("import:build:done n", _entities.size());
 
     loadScenesFromSettings();
 
+    // The entity list was just replaced, so any refresh chain still walking
+    // the old list is stale. Clear the guard so this refresh always starts.
+    _refreshActive = false;
     refreshAllEntities(false);
+
+    if (dropped > 0) {
+      // Tell the user rather than silently showing a short list.
+      System.println("import: dropped " + dropped + " entities, low memory");
+      App.getApp().viewController.showError(
+        "Low memory:\nonly " + _entities.size() + " of " + (_entities.size() + dropped) + "\nentities loaded"
+      );
+    }
   }
 
   function importEntities() {
+    Utils.logMem("importEntities:enter", null);
     var group = getGroup();
 
     if (group == null) {
