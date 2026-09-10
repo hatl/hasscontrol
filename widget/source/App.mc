@@ -148,8 +148,10 @@ class HassControlApp extends App.AppBase {
         // the cache): a state refresh walks an empty list and completes
         // instantly without a single request, so import the group instead.
         // importEntities() ends by starting the same refresh, so this also
-        // covers the state fill the call below would have done.
-        Hass.importEntities();
+        // covers the state fill the call below would have done. No view
+        // has been pushed yet at this point in getInitialView(), so the
+        // loader must stay off - see importEntities()'s comment.
+        Hass.importEntities(false);
       } else {
         Hass.refreshAllEntities(true);
       }

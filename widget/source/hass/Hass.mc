@@ -12,15 +12,21 @@ module Hass {
   // (see Entity.mc). Bumped so a :fullmem device never misreads an old
   // v2 (6-field) array with the new 10-field stride - offset math would
   // silently pull the next entity's id/name into this one's tail fields.
-  // :lowmem's stride never changed (still 6), so it isn't actually at risk
-  // here, but shares the bump anyway rather than tracking two key versions.
+  // :lowmem's stride never changed (still 6), so it stays on v2 below -
+  // bumping it too would force every lowmem install to migrate for a
+  // format change that never applied to it.
+  (:fullmem)
   const STORAGE_KEY = "Hass/entities/v3";
 
-  // The pre-2.2.0 flat-array key. 2.2.0 bumped to v3 without a reader for
-  // v2, so a 2.1.0 -> 2.2.0 update lost the whole entity list
-  // ("No entities configured", startup refresh walking an empty list).
-  // loadStoredEntities() migrates v2 once, then deletes the key.
+  // The pre-2.2.0 flat-array key, read by loadStoredEntities()'s one-time
+  // migration below. :fullmem-only: on :lowmem, STORAGE_KEY is already
+  // this same key (see above), so there's nothing to migrate from.
+  (:fullmem)
   const STORAGE_KEY_V2 = "Hass/entities/v2";
+
+  (:lowmem)
+  const STORAGE_KEY = "Hass/entities/v2";
+
   const STORAGE_KEY_LEGACY = "Hass/entities";
 
   var client = null;
@@ -183,6 +189,9 @@ module Hass {
     }
   }
 
+  // :fullmem needs the v2 -> v3 migration below; :lowmem's STORAGE_KEY is
+  // already v2, so there's nothing to migrate and it keeps the plain read.
+  (:fullmem)
   function loadStoredEntities() {
     _entities = new [0];
 
@@ -215,11 +224,35 @@ module Hass {
     Utils.debugLog("Loaded entities: ", _entities.size(), " total");
   }
 
+  (:lowmem)
+  function loadStoredEntities() {
+    _entities = new [0];
+
+    var stored = App.Storage.getValue(STORAGE_KEY);
+
+    if (stored == null) {
+      _loadLegacyStoredEntities();
+    } else {
+      for (var i = 0; i + Entity.STORED_FIELDS <= stored.size(); i += Entity.STORED_FIELDS) {
+        var entity = Entity.createFromStorage(stored, i);
+        // Filter out null entities (from corrupted or invalid data)
+        if (entity != null) {
+          _entities.add(entity);
+        }
+      }
+    }
+
+    loadScenesFromSettings();
+
+    Utils.debugLog("Loaded entities: ", _entities.size(), " total");
+  }
+
   // Reads the 2.1.0-era flat array (Entity.STORED_FIELDS_V2 slots per
   // entity) and rewrites it under the current key. 2.2.0 bumped the key
   // without a migration, which made the 2.1.0 -> 2.2.0 update show
   // "No entities configured" with a startup refresh that walks an empty
   // list - the data was orphaned, not gone, so this recovers it.
+  (:fullmem)
   function _migrateV2Entities() {
     var stored = App.Storage.getValue(STORAGE_KEY_V2);
 
@@ -653,7 +686,15 @@ module Hass {
     }
   }
 
-  function importEntities() {
+  // showLoaderUi must be false when called from App.getInitialView()'s
+  // cold-start self-heal (see below) - the runtime hasn't pushed the
+  // initial view onto the Ui stack yet at that point, and showLoader()'s
+  // Ui.pushView() destabilizes the simulator (and, going by the crash
+  // shape, likely real hardware too) once enough Ui.requestUpdate() calls
+  // land during the refresh that follows. The initial view already shows
+  // "No entities" and updates once data arrives, so no loader is needed
+  // there anyway.
+  function importEntities(showLoaderUi) {
     Utils.logMem("importEntities:enter", null);
     var group = getGroup();
 
@@ -662,7 +703,9 @@ module Hass {
       return;
     }
 
-    App.getApp().viewController.showLoader("Refreshing");
+    if (showLoaderUi) {
+      App.getApp().viewController.showLoader("Refreshing");
+    }
 
     client.getEntity(group, null, Utils.method(Hass, :_onReceiveEntities));
   }

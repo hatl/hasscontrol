@@ -543,8 +543,17 @@ module Utils {
 
   // Formats a numeric entity value (input_number/number) to the decimal
   // precision implied by its step, instead of the raw float representation.
+  // A HA state isn't always a number (e.g. "unavailable"/"unknown" during a
+  // refresh) - toFloat() returns null for those, which would crash on
+  // .format(); fall back to the raw value rather than formatting it.
   (:fullmem)
   function formatNumberForStep(value, step) {
-    return value.toFloat().format("%." + decimalPlacesForStep(step) + "f");
+    var num = value.toFloat();
+
+    if (num == null) {
+      return value;
+    }
+
+    return num.format("%." + decimalPlacesForStep(step) + "f");
   }
 }
