@@ -1,0 +1,8 @@
+<resources>
+    <drawables>
+        <!-- Devices whose launcher icon slot is 40x33: the compiler would
+             stretch the round icon into an oval, so they get a padded copy
+             that keeps it round. Wired up per device in monkey.jungle. -->
+        <bitmap id="LauncherIcon" filename="launcher_icon.png" />
+    </drawables>
+</resources>

@@ -4,34 +4,23 @@ using Utils;
 
 (:glance)
 class AppGlance extends Ui.GlanceView {
-  var _mClient;
-
   function initialize() {
     GlanceView.initialize();
   }
 
-  function getLayout() {
-    setLayout([]);
-  }
-
   function onUpdate(dc) {
-    GlanceView.onUpdate(dc);
+    // No GlanceView.onUpdate(dc) and a transparent text background: the
+    // firmware paints the glance stripe itself, and clearing or filling the
+    // dc would draw a black box over it that doesn't match the other glances.
+    var x = Utils.isRectangularScreen() ? 10 : 5;
 
-    var height = dc.getHeight();
-
-    var font = Graphics.FONT_MEDIUM;
-    var text = "HassControl";
-
-    var textDimensions = dc.getTextDimensions(text, font);
-    var textHeight = textDimensions[1];
-
-    // Adjust text position based on screen shape
-    if (Utils.isRectangularScreen()) {
-      dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_BLACK);
-      dc.drawText(10, (height / 2) - (textHeight / 2), font, text, Graphics.TEXT_JUSTIFY_LEFT);
-    } else {
-      dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_BLACK);
-      dc.drawText(5, (height / 2) - (textHeight / 2), font, text, Graphics.TEXT_JUSTIFY_LEFT);
-    }
+    dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
+    dc.drawText(
+      x,
+      dc.getHeight() / 2,
+      Graphics.FONT_MEDIUM,
+      "HassControl",
+      Graphics.TEXT_JUSTIFY_LEFT | Graphics.TEXT_JUSTIFY_VCENTER
+    );
   }
 }
