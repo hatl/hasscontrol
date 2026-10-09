@@ -6,6 +6,8 @@
             <iq:product id="approachs50"/>
             <iq:product id="approachs7042mm"/>
             <iq:product id="approachs7047mm"/>
+            <iq:product id="approachs7243mm"/>
+            <iq:product id="approachs7247mm"/>
             <iq:product id="d2air"/>
             <iq:product id="d2airx10"/>
             <iq:product id="d2delta"/>
@@ -38,6 +40,7 @@
             <iq:product id="edgemtb"/>
             <iq:product id="enduro"/>
             <iq:product id="enduro3"/>
+            <iq:product id="enduro4"/>
             <iq:product id="epix2"/>
             <iq:product id="epix2pro42mm"/>
             <iq:product id="epix2pro47mm"/>
@@ -67,6 +70,13 @@
             <iq:product id="fenix8pro47mm"/>
             <iq:product id="fenix8solar47mm"/>
             <iq:product id="fenix8solar51mm"/>
+            <iq:product id="fenix943mm"/>
+            <iq:product id="fenix947mm"/>
+            <iq:product id="fenix9pro43mm"/>
+            <iq:product id="fenix9pro47mm"/>
+            <iq:product id="fenix9pro51mm"/>
+            <iq:product id="fenix9prosolar47mm"/>
+            <iq:product id="fenix9prosolar51mm"/>
             <iq:product id="fenixchronos"/>
             <iq:product id="fenixe"/>
             <iq:product id="fr165"/>
