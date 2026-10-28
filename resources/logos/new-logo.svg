@@ -5,9 +5,9 @@
    viewBox="0 0 500 500"
    version="1.1"
    id="svg42"
-   sodipodi:docname="logo.svg"
-   inkscape:version="1.1.2 (0a00cf5339, 2022-02-04)"
-   inkscape:export-filename="/home/gerhard/git_clones/hasscontrol/resources/logos/logo.png"
+   sodipodi:docname="new-logo.svg"
+   inkscape:version="1.4.3 (0d15f75042, 2025-12-25)"
+   inkscape:export-filename="logo.png"
    inkscape:export-xdpi="96"
    inkscape:export-ydpi="96"
    xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
@@ -25,14 +25,16 @@
      inkscape:pagecheckerboard="0"
      showgrid="false"
      inkscape:zoom="1.4142136"
-     inkscape:cx="140.3607"
+     inkscape:cx="140.71425"
      inkscape:cy="265.16504"
-     inkscape:window-width="1920"
-     inkscape:window-height="1014"
+     inkscape:window-width="2560"
+     inkscape:window-height="1367"
      inkscape:window-x="0"
      inkscape:window-y="0"
      inkscape:window-maximized="1"
-     inkscape:current-layer="svg42" />
+     inkscape:current-layer="svg42"
+     inkscape:showpageshadow="2"
+     inkscape:deskcolor="#d1d1d1" />
   <!-- Generator: Sketch 47.1 (45422) - http://www.bohemiancoding.com/sketch -->
   <title
      id="title2">logo-pretty</title>
@@ -82,24 +84,6 @@
     </linearGradient>
     <linearGradient
        inkscape:collect="always"
-       xlink:href="#linearGradient-3"
-       id="linearGradient70"
-       x1="250"
-       y1="45.699138"
-       x2="250"
-       y2="468.43112"
-       gradientUnits="userSpaceOnUse" />
-    <linearGradient
-       inkscape:collect="always"
-       xlink:href="#linearGradient-3"
-       id="linearGradient72"
-       x1="250"
-       y1="45.699138"
-       x2="250"
-       y2="468.43112"
-       gradientUnits="userSpaceOnUse" />
-    <linearGradient
-       inkscape:collect="always"
        xlink:href="#linearGradient-6"
        id="linearGradient74"
        x1="186.37999"
@@ -140,74 +124,38 @@
        y2="420.57272"
        gradientTransform="matrix(0.69669177,0,0,0.69669177,5.9285166,77.132727)" />
   </defs>
-  <g
-     id="background/pretty"
-     style="fill:none;fill-rule:evenodd;stroke:none;stroke-width:1">
-    <g
-       id="background-copy">
-      <mask
-         id="mask-2"
-         fill="#ffffff">
-        <use
-           xlink:href="#path-1"
-           id="use20"
-           x="0"
-           y="0"
-           width="100%"
-           height="100%" />
-      </mask>
-      <g
-         id="Rectangle" />
-      <g
-         id="depth-borders"
-         mask="url(#mask-2)">
-        <g
-           id="fill/blue-gradient"
-           fill="url(#linearGradient-3)"
-           style="fill:url(#linearGradient72)">
-          <rect
-             id="Rectangle-2"
-             x="0"
-             y="0"
-             width="500"
-             height="500"
-             style="fill:url(#linearGradient70)" />
-        </g>
-        <path
-           d="M 500,252.5 V 46.149934 C 500,30.102596 498.32914,24.283444 495.19161,18.416777 492.05408,12.550111 487.44989,7.9459163 481.58322,4.8083887 475.71656,1.670861 469.8974,0 453.85007,0 H 46.149934 C 30.102596,0 24.283444,1.670861 18.416777,4.8083887 12.550111,7.9459163 7.9459163,12.550111 4.8083887,18.416777 1.670861,24.283444 0,30.102596 0,46.149934 V 252.5 51.149934 C 0,35.102596 1.670861,29.283444 4.8083887,23.416777 7.9459163,17.550111 12.550111,12.945916 18.416777,9.8083887 24.283444,6.670861 30.102596,5 46.149934,5 H 453.85007 c 16.04733,0 21.86649,1.670861 27.73315,4.8083887 5.86667,3.1375273 10.47086,7.7417223 13.60839,13.6083883 C 498.32914,29.283444 500,35.102596 500,51.149934 Z"
-           id="Combined-Shape"
-           fill-opacity="0.25"
-           fill="#ffffff" />
-        <path
-           d="m 500,247.5 v 206.35007 c 0,16.04733 -1.67086,21.86649 -4.80839,27.73315 -3.13753,5.86667 -7.74172,10.47086 -13.60839,13.60839 C 475.71656,498.32914 469.8974,500 453.85007,500 H 46.149934 C 30.102596,500 24.283444,498.32914 18.416777,495.19161 12.550111,492.05408 7.9459163,487.44989 4.8083887,481.58322 1.670861,475.71656 0,469.8974 0,453.85007 V 247.5 448.85007 c 0,16.04733 1.670861,21.86649 4.8083887,27.73315 3.1375276,5.86667 7.7417223,10.47086 13.6083883,13.60839 C 24.283444,493.32914 30.102596,495 46.149934,495 H 453.85007 c 16.04733,0 21.86649,-1.67086 27.73315,-4.80839 5.86667,-3.13753 10.47086,-7.74172 13.60839,-13.60839 C 498.32914,470.71656 500,464.8974 500,448.85007 Z"
-           id="path27"
-           fill-opacity="0.149938"
-           fill="#000000" />
-      </g>
-    </g>
-  </g>
+  <circle
+     style="fill:#6cccf7;stroke:none;stroke-width:4.08821;stroke-linecap:round;stroke-linejoin:bevel;paint-order:stroke markers fill;fill-opacity:1"
+     id="path1"
+     cx="250"
+     cy="250"
+     r="247.95589" />
   <g
      id="large-tree"
      fill-rule="nonzero"
      transform="translate(96,70)"
      style="fill:none;stroke:none;stroke-width:1" />
   <g
-     id="fill/white-gradient"
-     mask="url(#mask-5)"
-     fill-rule="evenodd"
-     fill="url(#linearGradient-6)"
-     style="fill:url(#linearGradient76);stroke:none;stroke-width:1"
-     transform="matrix(0.68571429,0,0,0.68571429,216.3743,130)">
-    <rect
-       id="rect36"
-       x="0"
-       y="0"
-       width="397"
-       height="350"
-       style="fill:url(#linearGradient74)" />
+     id="g1"
+     transform="matrix(0.8379547,0,0,0.8379547,39.584997,40.511324)">
+    <g
+       id="fill/white-gradient"
+       mask="url(#mask-5)"
+       fill-rule="evenodd"
+       fill="url(#linearGradient-6)"
+       style="fill:url(#linearGradient76);stroke:none;stroke-width:1"
+       transform="matrix(0.68571429,0,0,0.68571429,216.3743,130)">
+      <rect
+         id="rect36"
+         x="0"
+         y="0"
+         width="397"
+         height="350"
+         style="fill:url(#linearGradient74)" />
+    </g>
+    <path
+       d="m 113.61247,240 h 49.99998 l -24.99999,-24.99999 14.2,-14.20001 49.2,49.20001 -49.2,49.19999 -14.2,-14.19999 24.99999,-25 H 113.61247 V 240 M 93.612463,309.99999 A 59.999995,59.999995 0 0 1 33.612465,250.00001 59.999995,59.999995 0 0 1 93.612463,190 c 14.000007,0 26.899997,5 37.100007,12.9 l 14.19999,-14.2 -1.79999,-1.4 -9.50001,-57.3 H 53.612466 l -9.499999,57.3 c -18.599999,14.6 -30.499996,37.3 -30.499996,62.70001 0,25.50001 11.899997,48.09999 30.499996,62.69998 L 53.612466,370 h 79.999994 l 9.50001,-57.3 1.79999,-1.39999 -14.19999,-14.2 c -10.20001,7.9 -23.1,12.89999 -37.100007,12.89998 z"
+       id="path2"
+       style="fill:url(#linearGradient2391);fill-opacity:1;stroke-width:10.0005;stroke-miterlimit:4;stroke-dasharray:none" />
   </g>
-  <path
-     d="m 113.61247,240 h 49.99998 l -24.99999,-24.99999 14.2,-14.20001 49.2,49.20001 -49.2,49.19999 -14.2,-14.19999 24.99999,-25 H 113.61247 V 240 M 93.612463,309.99999 A 59.999995,59.999995 0 0 1 33.612465,250.00001 59.999995,59.999995 0 0 1 93.612463,190 c 14.000007,0 26.899997,5 37.100007,12.9 l 14.19999,-14.2 -1.79999,-1.4 -9.50001,-57.3 H 53.612466 l -9.499999,57.3 c -18.599999,14.6 -30.499996,37.3 -30.499996,62.70001 0,25.50001 11.899997,48.09999 30.499996,62.69998 L 53.612466,370 h 79.999994 l 9.50001,-57.3 1.79999,-1.39999 -14.19999,-14.2 c -10.20001,7.9 -23.1,12.89999 -37.100007,12.89998 z"
-     id="path2"
-     style="fill:url(#linearGradient2391);fill-opacity:1;stroke-width:10.0005;stroke-miterlimit:4;stroke-dasharray:none" />
 </svg>
