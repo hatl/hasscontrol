@@ -65,6 +65,7 @@ Currently only following Home Assistant entities are supported:
  cover         | Both closing and opening the cover is supported.
  fan           | Turning on and off is supported. Changing speed is not.
  switch        | Only turning on/off, energy consumption and standby mode are not supported.
+ valve         | Opening and closing is supported. Stopping and setting a position are not.
  automation*   | Can be turned on/off.
  scene*        | Execution
  script*       | Execution

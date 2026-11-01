@@ -189,12 +189,15 @@ module Hass {
                 serviceAction = "turn_off";
                 newState = "off";
             } else if (action == Client.ENTITY_ACTION_CLOSE) {
-                serviceAction = "close";
+                // OPEN/CLOSE are only used for valves - covers toggle (below).
+                // Home Assistant's valve services are open_valve and
+                // close_valve; there is no "valve/open" or "valve/close".
+                serviceAction = "close_valve";
                 newState = "closed";
             } else if (action == Client.ENTITY_ACTION_COVER_TOGGLE) {
                 serviceAction = "toggle";
             } else if (action == Client.ENTITY_ACTION_OPEN) {
-                serviceAction = "open";
+                serviceAction = "open_valve";
                 newState = "open";
             } else if (action == Client.ENTITY_ACTION_LOCK) {
                 serviceAction = "lock";
