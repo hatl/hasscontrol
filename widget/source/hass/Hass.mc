@@ -843,9 +843,10 @@ module Hass {
   function selectOption(entity, option) {
     var params = { "option" => option };
 
-    // No connection: offer to send it over Wi-Fi/LTE (see WifiLte.mc).
+    // No connection: offer to send it over Wi-Fi/LTE (see WifiLte.mc). The
+    // question shows just the option, see WifiLte.offerService().
     if (WifiLte.shouldUse()) {
-      WifiLte.offerService(entity, "select_option", params, "Selecting\n" + option);
+      WifiLte.offerService(entity, "select_option", params, "Selecting\n" + option, option);
       return;
     }
 
@@ -891,14 +892,12 @@ module Hass {
   function setInputNumberValue(entity, value) {
     var params = { "value" => value };
 
-    // No connection: offer to send it over Wi-Fi/LTE (see WifiLte.mc).
+    // No connection: offer to send it over Wi-Fi/LTE (see WifiLte.mc). The
+    // question shows just the value, see WifiLte.offerService().
     if (WifiLte.shouldUse()) {
-      WifiLte.offerService(
-        entity,
-        "set_value",
-        params,
-        "Setting " + entity.getRawName() + "\nto " + Utils.formatNumberForStep(value, entity.getStep())
-      );
+      var text = Utils.formatNumberForStep(value, entity.getStep());
+
+      WifiLte.offerService(entity, "set_value", params, "Setting " + entity.getRawName() + "\nto " + text, text);
       return;
     }
 
@@ -949,21 +948,29 @@ module Hass {
   }
 
   // Sets a date/time entity to `fields` ([year, month, day, hour, minute],
-  // the watch's local time - see DateTimeValue), sending exactly the part
-  // the entity has.
+  // the watch's local time - see DateTimeValue), sending the part `mode`
+  // names: what the editor showed.
   (:fullmem)
-  function setDateTimeValue(entity, fields) {
-    var service = DateTimeValue.serviceName(entity);
-    var params = DateTimeValue.serviceParams(entity, fields);
+  function setDateTimeValue(entity, fields, mode) {
+    // A refresh while the editor was open can change what an
+    // input_datetime holds (its state shows whether it has a date, a time
+    // or both). What was entered then no longer fits it, and sending a part
+    // it does not have would fail - as LockConfirm.execute() refuses a lock
+    // whose state changed.
+    if (DateTimeValue.modeOf(entity) != mode) {
+      App.getApp().viewController.showError("Entity changed,\nplease retry");
+      return;
+    }
 
-    // No connection: offer to send it over Wi-Fi/LTE (see WifiLte.mc).
+    var service = DateTimeValue.serviceName(entity);
+    var params = DateTimeValue.serviceParams(entity, fields, mode);
+
+    // No connection: offer to send it over Wi-Fi/LTE (see WifiLte.mc). The
+    // question shows just the value, see WifiLte.offerService().
     if (WifiLte.shouldUse()) {
-      WifiLte.offerService(
-        entity,
-        service,
-        params,
-        "Setting " + entity.getRawName() + "\nto " + DateTimeValue.format(DateTimeValue.modeOf(entity), fields)
-      );
+      var text = DateTimeValue.format(mode, fields);
+
+      WifiLte.offerService(entity, service, params, "Setting " + entity.getRawName() + "\nto " + text, text);
       return;
     }
 
@@ -1115,7 +1122,7 @@ module Hass {
       command["action"] = action;
     }
 
-    WifiLte.offer(command, loadingText + "\n" + entity.getRawName());
+    WifiLte.offer(command, loadingText + "\n" + entity.getRawName(), null);
     return true;
   }
 

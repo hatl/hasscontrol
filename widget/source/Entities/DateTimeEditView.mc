@@ -16,7 +16,7 @@ using Utils;
 //  * up/down (and the bands, and swipes as in the number editor) step the
 //    active field by one: month, day, hour, minute and AM/PM wrap around,
 //    the year stays within DateTimeValue.YEAR_MIN..YEAR_MAX. Holding up or
-//    down repeats the step.
+//    down repeats the step (see DateTimeEditDelegate.onKeyPressed()).
 //  * select moves on to the next field, and on the last one sends the
 //    value. Back goes to the previous field, and on the first one leaves
 //    without sending anything.
@@ -33,6 +33,7 @@ class DateTimeEditView extends Ui.View {
   static const FIELD_AMPM = 5;
 
   hidden var _mEntity;
+  hidden var _mMode;      // DateTimeValue.MODE_*, as the entity was when the editor opened
   hidden var _mValues;    // [year, month, day, hour (0-23), minute], see DateTimeValue
   hidden var _mFields;    // the fields the entity has, in the order they are edited
   hidden var _mActive;    // index into _mFields
@@ -66,6 +67,7 @@ class DateTimeEditView extends Ui.View {
 
     var mode = DateTimeValue.modeOf(entity);
 
+    _mMode = mode;
     _mFields = [];
     _mRows = [];
 
@@ -100,6 +102,11 @@ class DateTimeEditView extends Ui.View {
   // The value to send: [year, month, day, hour (0-23), minute], local time.
   function getValues() {
     return _mValues;
+  }
+
+  // The rows the editor shows, see Hass.setDateTimeValue().
+  function getMode() {
+    return _mMode;
   }
 
   function getActive() {
@@ -413,6 +420,10 @@ class DateTimeEditDelegate extends Ui.BehaviorDelegate {
   static const REPEAT_INTERVAL = 150;
   static const REPEAT_MAX = 60;
 
+  // How soon after a release the page behaviour counts as that release's,
+  // see onKeyReleased(): delivered with the release, it comes right after.
+  static const RELEASE_WINDOW = 300;
+
   hidden var _mEntity;
   hidden var _mView;
   // Set once confirm() or onBack() pops this view: input still queued (a
@@ -421,6 +432,8 @@ class DateTimeEditDelegate extends Ui.BehaviorDelegate {
   hidden var _mDismissed;
   hidden var _mRepeatDelta;  // +1/-1 while up/down is held, 0 otherwise
   hidden var _mRepeatCount;
+  hidden var _mSwallowStep;  // a held button was released after repeating, see onKeyReleased()
+  hidden var _mReleasedAt;   // System.getTimer() of that release
 
   function initialize(entity, view) {
     BehaviorDelegate.initialize();
@@ -429,6 +442,8 @@ class DateTimeEditDelegate extends Ui.BehaviorDelegate {
     _mDismissed = false;
     _mRepeatDelta = 0;
     _mRepeatCount = 0;
+    _mSwallowStep = false;
+    _mReleasedAt = 0;
   }
 
   hidden function step(delta) {
@@ -443,12 +458,23 @@ class DateTimeEditDelegate extends Ui.BehaviorDelegate {
   // up, the down button down - as in InputNumberEditDelegate.
   function onPreviousPage() {
     App.getApp().resetInactivityTimer();
-    return step(1);
+    return isReleaseStep() ? true : step(1);
   }
 
   function onNextPage() {
     App.getApp().resetInactivityTimer();
-    return step(-1);
+    return isReleaseStep() ? true : step(-1);
+  }
+
+  // True, once, for the page behaviour of a release that ended a repeat -
+  // see onKeyReleased(). Only right after the release: on a device that
+  // steps on the press, the flag would otherwise still be set when the
+  // next swipe comes, and swallow that.
+  hidden function isReleaseStep() {
+    var swallow = _mSwallowStep && System.getTimer() - _mReleasedAt < RELEASE_WINDOW;
+
+    _mSwallowStep = false;
+    return swallow;
   }
 
   // Select: the next field, or on the last one, send.
@@ -476,7 +502,7 @@ class DateTimeEditDelegate extends Ui.BehaviorDelegate {
     // or the Wi-Fi/LTE prompt), which a later popView() would take off
     // again instead of this one.
     Ui.popView(Ui.SLIDE_IMMEDIATE);
-    Hass.setDateTimeValue(_mEntity, _mView.getValues());
+    Hass.setDateTimeValue(_mEntity, _mView.getValues(), _mView.getMode());
     return true;
   }
 
@@ -577,6 +603,8 @@ class DateTimeEditDelegate extends Ui.BehaviorDelegate {
   function onKeyPressed(keyEvent) {
     var key = keyEvent.getKey();
 
+    _mSwallowStep = false;
+
     if (key == Ui.KEY_UP || key == Ui.KEY_DOWN) {
       _mRepeatDelta = key == Ui.KEY_UP ? 1 : -1;
       _mRepeatCount = 0;
@@ -588,16 +616,27 @@ class DateTimeEditDelegate extends Ui.BehaviorDelegate {
 
   // Any release ends the repeat: where holding up opens the menu, the
   // release may well be reported for another key.
+  //
+  // Whether the page behaviour comes with the press or with the release is
+  // not documented (onKey() is "pressed and released"). Where it comes
+  // with the release, a hold would step once more at the end, and a press
+  // just over REPEAT_DELAY twice. So once the repeat has stepped, the page
+  // behaviour that follows the release right away is swallowed. Where it
+  // came with the press, none follows, and the flag runs out.
   function onKeyReleased(keyEvent) {
+    _mSwallowStep = _mRepeatCount > 0;
+    _mReleasedAt = System.getTimer();
+    _mRepeatCount = 0;
     stopRepeat();
     return false;
   }
 
-  // Holding up opens the menu on some watches - that, too, ends the repeat.
-  // Not consumed, as in the number editor.
+  // Holding up opens the menu on some watches, about a second into the
+  // hold. While the repeat runs that is the same hold, so it is taken and
+  // the repeat goes on; the release (or REPEAT_MAX) still ends it. Not
+  // consumed otherwise, as in the number editor.
   function onMenu() {
-    stopRepeat();
-    return false;
+    return _mRepeatDelta != 0;
   }
 
   // The :fieldRepeat job.

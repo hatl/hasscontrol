@@ -69,7 +69,7 @@ Entities can be in various states:
 - Basic states: `STATE_ON`, `STATE_OFF`, `STATE_UNKNOWN`
 - Lock states: `STATE_LOCKED`, `STATE_UNLOCKED`, `STATE_LOCKING`, `STATE_UNLOCKING`
 - Cover states: `STATE_OPEN`, `STATE_CLOSED`, `STATE_OPENING`, `STATE_CLOSING`
-- Sensor state: `STATE_SENSOR` (with associated value) — also used for `TYPE_SELECT`'s current option, `TYPE_INPUT_NUMBER`'s current numeric value and `TYPE_DATETIME`'s state string (shown through `Entity.getDisplayValue()`)
+- Sensor state: `STATE_SENSOR` (with associated value) — also used for `TYPE_SELECT`'s current option, `TYPE_INPUT_NUMBER`'s current numeric value and `TYPE_DATETIME`'s state string (shown through `Entity.getDisplayValue()`). On fullmem the value itself is stored in the state slot, so it survives a launch without the phone (`Entity.writeToStorage()`/`restoreValue()`); the 64 KB tier stores "unknown" there, as before
 
 ## Adding New Entity Types
 When adding a new entity type:

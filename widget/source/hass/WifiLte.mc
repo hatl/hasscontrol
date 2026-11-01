@@ -214,27 +214,33 @@ module WifiLte {
   // Client.callService()). Optionally "exit" => true: "Close App after
   // successful action" applies (see onSyncFinished()). `text` says what is
   // about to happen, e.g. "Unlocking\nFront Door"; it is also shown on the
-  // sync screen.
-  function offer(command, text) {
+  // sync screen. `question`, when not null, is asked instead of `text`: a
+  // single short line (see offerService()).
+  function offer(command, text, question) {
     command["msg"] = text;
 
     // The question leads with Wi-Fi/LTE rather than ending on it: Garmin's confirmation screen
     // fits about two lines, and with the action first ("Turning off / Kitchen / via Wi-Fi/LTE?")
     // the watch cut the Wi-Fi/LTE line off entirely - leaving a question indistinguishable from
     // an ordinary one, for an action that takes a slow sync. Seen on a fenix 7X.
-    _confirmation = new Ui.Confirmation("Wi-Fi/LTE?\n" + text);
+    _confirmation = new Ui.Confirmation("Wi-Fi/LTE?\n" + (question != null ? question : text));
 
     Ui.pushView(_confirmation, new WifiLteConfirmDelegate(command), Ui.SLIDE_IMMEDIATE);
   }
 
-  // offer() for the select/input_number style service calls.
-  function offerService(entity, service, params, text) {
+  // offer() for the select/input_number/date-time style service calls.
+  // `question` is the value alone ("14:05", "45", "Away"), or null to ask
+  // with `text`: the two lines the confirmation screen fits leave no room
+  // after "Setting <name>" - on a fenix 7X "Wi-Fi/LTE?\nSetting Lunch\nto
+  // 14:05" showed as "Wi-Fi/LTE? / Setting Lunch...", without the value
+  // about to be sent. The sync screen still shows `text`.
+  function offerService(entity, service, params, text, question) {
     offer({
       "id" => entity.getId(),
       "domain" => entity.getServiceDomain(),
       "service" => service,
       "params" => params
-    }, text);
+    }, text, question);
   }
 
   // The user confirmed `command`: stores it now, and starts the sync a
@@ -627,7 +633,15 @@ class HassSyncDelegate extends Communications.SyncDelegate {
       return;
     }
 
-    WifiLte.applyResult(data);
+    // Caught, as in onStartSync(): the action was carried out, and the sync
+    // screen waits for finish() - reading the new state back must not keep
+    // it from ending.
+    try {
+      WifiLte.applyResult(data);
+    } catch (e) {
+      Utils.debugLog("applyResult: ", e.getErrorMessage(), null);
+    }
+
     finish(null, true);
   }
 

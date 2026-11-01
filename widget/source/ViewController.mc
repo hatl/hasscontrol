@@ -67,6 +67,25 @@ class ViewController {
     return _loaderActive != null && !isErrorActive() && !isLoginActive();
   }
 
+  // Whether a pop meant for the loader would take off the loader. Back on a
+  // loader shown without a delegate pops it without anyone being told, so
+  // _loaderActive can outlive it - and the pop would then take off whatever
+  // is on top instead, such as an editor opened since. Where
+  // getCurrentView() tells (CIQ 3.4.0+), another view on top means the
+  // loader is gone. A null view proves nothing - Ui.ProgressBar is not a
+  // View, and how getCurrentView() reports one is not documented - so then,
+  // as below 3.4.0, the pop goes ahead as it always did.
+  hidden function isLoaderOnTop() {
+    if (Ui has :getCurrentView) {
+      var current = Ui.getCurrentView();
+
+      if (current != null && current[0] != null && current[0] != _loaderView) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   // Returns true when the "useListView" setting is enabled, selecting the
   // 3-row list view instead of the classic single-card view.
   function useListEntityView() {
@@ -257,7 +276,7 @@ class ViewController {
     // to run it would close this one before its request has completed.
     Scheduler.cancel(:loader);
 
-    if (isShowingLoader()) {
+    if (isShowingLoader() && isLoaderOnTop()) {
       Ui.popView(Ui.SLIDE_IMMEDIATE);
     }
 
@@ -281,7 +300,9 @@ class ViewController {
         return;
       }
 
-      Ui.popView(Ui.SLIDE_BLINK);
+      if (isLoaderOnTop()) {
+        Ui.popView(Ui.SLIDE_BLINK);
+      }
     }
 
     _loaderActive = null;
@@ -290,7 +311,7 @@ class ViewController {
   function removeLoaderImmediate() {
     Scheduler.cancel(:loader);
 
-    if (isShowingLoader()) {
+    if (isShowingLoader() && isLoaderOnTop()) {
       Ui.popView(Ui.SLIDE_BLINK);
     }
 

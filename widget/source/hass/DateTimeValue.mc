@@ -35,7 +35,7 @@ using Utils;
 // sent the same way, it still round-trips unchanged.
 //
 // :fullmem only, see monkey.jungle. The 64 KB tier shows these entities
-// read-only, trimmed but not converted (Entity.formatDateTime()).
+// read-only, trimmed but not converted (Entity.getDisplayValue()).
 (:fullmem)
 module DateTimeValue {
   // What an entity holds: a date, a time of day, or both. Bits, so that
@@ -100,12 +100,10 @@ module DateTimeValue {
   }
 
   // The service call's parameters that set `entity` to `fields` (local
-  // time): exactly the one key the entity has. The mode is the entity's
-  // current one, which a refresh may have changed since the editor opened -
-  // sending a key the entity does not have would fail.
-  function serviceParams(entity, fields) {
-    var mode = modeOf(entity);
-
+  // time): exactly the one key `mode` - the entity's - names. Sending a key
+  // the entity does not have would fail; Hass.setDateTimeValue() makes
+  // sure the mode is still the entity's.
+  function serviceParams(entity, fields, mode) {
     if (mode == MODE_DATE) {
       return { "date" => formatDate(fields) };
     }
@@ -167,7 +165,10 @@ module DateTimeValue {
 
   // The fields the editor starts with: `entity`'s value in local time, and
   // now (local) for whatever the state does not have or that cannot be
-  // read. The year is kept within YEAR_MIN..YEAR_MAX.
+  // read. A value outside the years the editor offers becomes the nearest
+  // end of them as a whole - YEAR_MIN-01-01 00:00 or YEAR_MAX-12-31 23:59 -
+  // as clamping just its year would move it by years and could leave a
+  // 29 February in a year without one.
   function initialFields(entity) {
     var now = Gregorian.info(Time.now(), Time.FORMAT_SHORT);
     var fields = [now.year, now.month, now.day, now.hour, now.min];
@@ -186,16 +187,10 @@ module DateTimeValue {
     }
 
     if (fields[YEAR] < YEAR_MIN) {
-      fields[YEAR] = YEAR_MIN;
-    } else if (fields[YEAR] > YEAR_MAX) {
-      fields[YEAR] = YEAR_MAX;
+      return [YEAR_MIN, 1, 1, 0, 0];
     }
-
-    // 29 February moved to a year that has none.
-    var days = daysInMonth(fields[YEAR], fields[MONTH]);
-
-    if (fields[DAY] > days) {
-      fields[DAY] = days;
+    if (fields[YEAR] > YEAR_MAX) {
+      return [YEAR_MAX, 12, 31, 23, 59];
     }
 
     return fields;

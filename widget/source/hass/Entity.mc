@@ -36,11 +36,17 @@ module Hass {
     static const STORED_FIELDS_V2 = 6;
 
     // Appends this entity at `offset` and returns the next free offset.
+    //
+    // Slot 2 holds the state word - or, for a value shown like a sensor's
+    // (STATE_SENSOR: sensor, select, input_number/number and the date/time
+    // entities), the value itself, so that it is still there after a launch
+    // without the phone (see restoreValue()). Only on :fullmem: the 64 KB
+    // tier keeps "unknown" there, as before, to spare its storage budget.
     (:fullmem)
     function writeToStorage(target, offset) {
       target[offset]     = _mId;
       target[offset + 1] = _mName;
-      target[offset + 2] = Entity.stateToString(_mState);
+      target[offset + 2] = _mState == STATE_SENSOR && _mSensorValue != null ? _mSensorValue : Entity.stateToString(_mState);
       target[offset + 3] = _mSensorClass;
       target[offset + 4] = _mIcon;
       target[offset + 5] = _mDeviceClass;
@@ -74,7 +80,7 @@ module Hass {
 
       var name = stored[offset + 1];
 
-      return new Entity({
+      var entity = new Entity({
         :id => id,
         :name => name != null ? name : id,
         :state => stored[offset + 2],
@@ -86,6 +92,27 @@ module Hass {
         :max => stored[offset + 8],
         :step => stored[offset + 9]
       });
+
+      entity.restoreValue(stored[offset + 2]);
+      return entity;
+    }
+
+    // Puts back the value writeToStorage() kept for a sensor-like entity,
+    // the way a refresh sets it. Needs the type, so it runs once
+    // initialize() has detected that. Decided by the type rather than by
+    // the word: a text sensor or an option may well read "on" or "open".
+    // "unknown" and "unavailable" mean there is no value - and data stored
+    // by earlier versions holds "unknown" for all of these entities.
+    (:fullmem)
+    function restoreValue(value) {
+      if (
+        value != null
+        && (_mType == TYPE_SENSOR || _mType == TYPE_SELECT || _mType == TYPE_INPUT_NUMBER || _mType == TYPE_DATETIME)
+        && !HASS_STATE_UNKNOWN.equals(value)
+        && !"unavailable".equals(value)
+      ) {
+        setState(value);
+      }
     }
 
     (:lowmem)
@@ -261,6 +288,13 @@ module Hass {
     (:fullmem)
     hidden var _mServiceDomain;
 
+    // getDisplayValue()'s last text for a date/time entity, and the state
+    // string it was made from. Not persisted.
+    (:fullmem)
+    hidden var _mDisplayText;
+    (:fullmem)
+    hidden var _mDisplayFrom;
+
     function initialize(entity) {
       _mId = entity[:id];
       _mName = entity[:name];
@@ -391,6 +425,8 @@ module Hass {
       _mMin = entity[:min];
       _mMax = entity[:max];
       _mStep = entity[:step];
+      _mDisplayText = null;
+      _mDisplayFrom = null;
     }
 
     (:lowmem)
@@ -468,10 +504,19 @@ module Hass {
     // "2:30 PM" on a 12-hour watch) or "2026-11-01 14:30", datetime.* in the
     // watch's local time - see DateTimeValue.displayText(). Any other value
     // is shown unchanged.
+    //
+    // getName() asks for this twice per visible row on every redraw, and the
+    // text takes parsing the state and reading the device settings - so it
+    // is only made again when the state string has changed. A new time zone
+    // or 12/24-hour setting therefore shows with the next state.
     (:fullmem)
     function getDisplayValue() {
       if (_mType == TYPE_DATETIME && _mSensorValue != null) {
-        return DateTimeValue.displayText(self);
+        if (_mDisplayFrom == null || !_mDisplayFrom.equals(_mSensorValue)) {
+          _mDisplayText = DateTimeValue.displayText(self);
+          _mDisplayFrom = _mSensorValue;
+        }
+        return _mDisplayText;
       }
       return _mSensorValue;
     }
