@@ -218,7 +218,11 @@ module WifiLte {
   function offer(command, text) {
     command["msg"] = text;
 
-    _confirmation = new Ui.Confirmation(text + "\nvia Wi-Fi/LTE?");
+    // The question leads with Wi-Fi/LTE rather than ending on it: Garmin's confirmation screen
+    // fits about two lines, and with the action first ("Turning off / Kitchen / via Wi-Fi/LTE?")
+    // the watch cut the Wi-Fi/LTE line off entirely - leaving a question indistinguishable from
+    // an ordinary one, for an action that takes a slow sync. Seen on a fenix 7X.
+    _confirmation = new Ui.Confirmation("Wi-Fi/LTE?\n" + text);
 
     Ui.pushView(_confirmation, new WifiLteConfirmDelegate(command), Ui.SLIDE_IMMEDIATE);
   }
