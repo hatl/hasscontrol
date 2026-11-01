@@ -356,7 +356,7 @@ On touchscreen devices, the long press gesture provides a convenient way to acce
 
 ***Note:*** *This section does not apply to [low-memory devices](#low-memory-devices).*
 
-**Waiting for the phone.** If you open the widget while the phone is not connected, and you are logged in (or [battery reporting](#battery-and-performance) is set up), it shows `Waiting for phone` instead of failing with `Phone not connected` and closing. Once the phone connects, the loader disappears and the entity states are refreshed (and the battery level is reported, if set up). Press back to leave the loader and look at the last known states in the meantime; the refresh still happens once the phone is back.
+**Waiting for the phone.** If you open the widget while the phone is not connected, and you are logged in (or [battery reporting](#battery-and-performance) is set up), it shows `Waiting for connection` instead of failing with `Phone not connected` and closing. Once the phone connects, the loader disappears and the entity states are refreshed (and the battery level is reported, if set up). Press back to leave the loader and look at the last known states in the meantime; the refresh still happens once the phone is back.
 
 The widget waits for up to 3 minutes. Then it gives up: the loader disappears and the last known states stay on screen.
 
@@ -367,16 +367,23 @@ No loader is shown in two cases - the widget then waits quietly, and still refre
 
 Actions you take without the phone (and without Wi-Fi/LTE) still show `Phone not connected` and close the widget about 2.5 seconds later - except while the widget is still waiting for the phone after you opened it: then only the message is shown.
 
-**Wi-Fi/LTE.** Watches with Wi-Fi or LTE can send actions without the phone, the way [GarminHomeAssistant](https://github.com/house-of-abbey/GarminHomeAssistant/blob/main/Wi-Fi.md) does it. Enable `Send actions over Wi-Fi/LTE when the phone is not connected` in the app settings. Then, while the phone is not connected, selecting an entity asks e.g. `Unlocking Front Door via Wi-Fi/LTE?`; confirm, and the watch starts a sync - the system sync screen - during which it sends the action to Home Assistant itself. With Wi-Fi/LTE available the widget still waits for the phone at startup, but without the `Waiting for phone` loader (see above).
+**Edge bike computers.** Edge units with Wi-Fi keep it switched on whenever no activity is being recorded. While their Wi-Fi is connected, the widget talks to Home Assistant over it directly, just as through the phone: the states are refreshed (this also ends the wait at startup), and actions are sent right away, without a sync - the Wi-Fi/LTE setting below is not needed for that. This is based on Garmin's device data and forum; it has not been tested on an Edge.
+
+**Wi-Fi/LTE.** Watches with Wi-Fi or LTE can send actions without the phone, the way [GarminHomeAssistant](https://github.com/house-of-abbey/GarminHomeAssistant/blob/main/Wi-Fi.md) does it. Enable `Send actions over Wi-Fi/LTE when the phone is not connected` in the app settings. Then, while the phone is not connected, selecting an entity asks e.g. `Unlocking Front Door via Wi-Fi/LTE?`; confirm, and the watch starts a sync - the system sync screen - during which it sends the action to Home Assistant itself. With Wi-Fi/LTE available the widget still waits for the phone at startup, but without the `Waiting for connection` loader (see above).
 
 Limits:
 
 - **Actions only.** Entity states are not refreshed over Wi-Fi/LTE: you see and act on the last states known from the phone. Toggling uses those states, so e.g. a light already switched on elsewhere may be switched on again rather than off.
 - **Slow.** The watch first has to join your Wi-Fi access point (or the LTE network), which takes a while, and Wi-Fi/LTE use costs battery. Treat it as a last resort, not a way of operating.
 - **https only**, and the watch does the TLS handshake itself. Some Garmin models only offer cipher suites without forward secrecy over Wi-Fi, which many servers (Nabu Casa, Cloudflare, current nginx/Apache defaults) refuse - see the [FAQ](#wi-filte-the-sync-fails-with-unknown-error-0). An `http://localhost` host cannot be used here.
-- You have to be in range of the Wi-Fi access point configured on the watch. LTE reaches further, but your carrier may charge for it.
+- **Public DNS.** Over Wi-Fi, watches look host names up with public DNS servers rather than your router's, so a name that only exists in your home network (from a local DNS server or override, or `homeassistant.local`) cannot be found. The host has to resolve on the internet.
+- You have to be in range of the Wi-Fi access point configured on the watch. LTE reaches further, but your carrier may charge for it - and some LTE models do not let Connect IQ apps use LTE at all, e.g. the Fenix 8 Pro and Fenix 9 Pro (GarminHomeAssistant issues [#292](https://github.com/house-of-abbey/GarminHomeAssistant/issues/292) and [#385](https://github.com/house-of-abbey/GarminHomeAssistant/issues/385)).
+- **Only on watches with the sync API.** The setting does nothing on models whose Connect IQ lacks it, e.g. the Forerunner 255/255S, Venu Sq 2, Instinct 3, Instinct E, Instinct Crossover AMOLED, Edge Explore, Edge Explore 2, Edge MTB, Edge 520 Plus, Edge 820, Fenix 5X, GPSMAP 67 and Montana 7xx.
+- Below Connect IQ 4.0.4, the sync screen shows Garmin's generic sync text instead of the action.
+- On Edge units with Wi-Fi the question only comes up while their Wi-Fi is not connected, e.g. during an activity; otherwise the widget talks to Home Assistant directly (see above).
 - The [lock confirmation](#lock-confirmation) still applies. With `Yes/no question`, the Wi-Fi/LTE question is the only one asked.
-- A confirmed action that cannot be sent within two minutes is dropped, so an unlock can never happen unexpectedly on some later automatic sync.
+- A confirmed action that cannot be sent within one minute is dropped - as is one whose sync you cancel, or one still waiting the next time you open the widget - so an unlock can never happen unexpectedly on some later automatic sync.
+- If the sync ends with `Sent, reply unreadable`, the action reached Home Assistant, but the watch could not read the reply (it lists every state the action changed, which can be a lot). The action has most likely been carried out.
 
 ### Header Authentication
 
@@ -456,4 +463,4 @@ Your watch is one of the [low-memory devices](#low-memory-devices). The 3-row li
 The lock PIN was entered wrong three times in a row, so lock control is blocked - like the Garmin Pay wallet after three wrong passcodes. Set a new PIN under `Lock PIN` in the ConnectIQ app settings to unblock it (to keep your old PIN, change it once and then back). See [Lock confirmation](#lock-confirmation).
 
 #### Wi-Fi/LTE: the sync fails with "Unknown error (0)"
-Over Wi-Fi/LTE the watch makes the TLS connection to your server itself, without the phone. Response code 0 means the handshake failed: some Garmin watches (confirmed for the Epix Gen 2, likely the Fenix 7 Pro and Forerunner 265) only offer TLS 1.2 cipher suites without forward secrecy over Wi-Fi, and servers that require ECDHE refuse them. There is no fix in the widget - it is a limitation of the watch firmware. If you control the server's TLS settings you may be able to allow such a connection; GarminHomeAssistant's [Wi-Fi notes](https://github.com/house-of-abbey/GarminHomeAssistant/blob/main/Wi-Fi.md#limits-of-use) collect what users found.
+Over Wi-Fi/LTE the watch makes the TLS connection to your server itself, without the phone. Response code 0 usually means the handshake failed: some Garmin watches (confirmed for the Epix Gen 2, likely the Fenix 7 Pro and Forerunner 265) only offer TLS 1.2 cipher suites without forward secrecy over Wi-Fi, and servers that require ECDHE refuse them. There is no fix in the widget - it is a limitation of the watch firmware. If you control the server's TLS settings you may be able to allow such a connection; GarminHomeAssistant's [Wi-Fi notes](https://github.com/house-of-abbey/GarminHomeAssistant/blob/main/Wi-Fi.md#limits-of-use) collect what users found.

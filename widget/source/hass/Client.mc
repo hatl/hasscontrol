@@ -120,11 +120,12 @@ module Hass {
         }
 
         // Whether a request can go out at all. They are relayed by the phone -
-        // except from inside a Wi-Fi/LTE sync, where the watch sends them
-        // itself (:fullmem, see WifiLte.mc).
+        // except from inside a Wi-Fi/LTE sync, and over Wi-Fi that is up
+        // outside one (Edge units), where the watch sends them itself
+        // (:fullmem, see WifiLte.hasDirectConnection()).
         (:fullmem)
         hidden function hasConnection() {
-            return WifiLte.isSyncActive() || System.getDeviceSettings().phoneConnected;
+            return WifiLte.isSyncActive() || WifiLte.hasDirectConnection();
         }
 
         (:lowmem)

@@ -4,20 +4,23 @@ using Toybox.WatchUi as Ui;
 
 // Launching without the phone used to fail every startup request, and the
 // first "Phone not connected" error closed the app 2.5 s later. This waits
-// for the phone instead and runs the startup requests once it is there
-// (see HassControlApp.startStartupWork()). While it waits, a "Phone not
-// connected" error does not close the app (HassControlApp.isWaitingForPhone(),
-// Error.initialize()).
+// for a connection instead - the phone, or Wi-Fi that is up outside a sync
+// as on Edge units (WifiLte.hasDirectConnection()) - and runs the startup
+// requests once there is one (see HassControlApp.startStartupWork()). While
+// it waits, a "Phone not connected" error does not close the app
+// (HassControlApp.isWaitingForPhone(), Error.initialize()).
 //
-// Meanwhile a "Waiting for phone" loader is shown - except when:
+// Meanwhile a "Waiting for connection" loader is shown - except when:
 //  * Wi-Fi/LTE execution is available (see WifiLte.mc): then the stored
 //    entities can be acted on right away, so nothing blocks them;
 //  * the initial view is BaseView (devices without glances): that is the
 //    widget's page in the widget loop, and a loader over it would take
 //    up/down and so block scrolling on through the loop.
-// The wait then runs quietly, and still refreshes once the phone connects.
+// The wait then runs quietly, and still refreshes once connected.
 // Back leaves the loader for the stored entities; the wait goes on quietly
 // the same way.
+//
+// While a Wi-Fi/LTE sync is pending it only keeps looking, see onTick().
 //
 // It gives up after MAX_WAIT: the loader goes, the stored states stay, and
 // a "Phone not connected" error closes the app again, as without the wait.
@@ -60,13 +63,28 @@ class ConnectionWait {
     Scheduler.schedule(:connWait, method(:onTick), FIRST_CHECK);
   }
 
-  // True until the phone has connected or the wait has given up.
+  // True until a connection is there or the wait has given up.
   function isPending() {
     return _mPending;
   }
 
   function onTick() {
-    if (System.getDeviceSettings().phoneConnected) {
+    // System.getTimer() wraps around: the difference stays right where a
+    // direct comparison of the two moments would not.
+    var elapsed = System.getTimer() - _mStartedAt;
+    var next = elapsed < FAST_PHASE ? POLL_INTERVAL : SLOW_POLL_INTERVAL;
+
+    if (WifiLte.isSyncPending()) {
+      // A Wi-Fi/LTE action is waiting for its sync, and the app may be
+      // alive under the system sync screen (see WifiLte.mc). Neither the
+      // loader nor the startup requests may start under it: view pushes
+      // during a sync are reported to fail on the device, and Wi-Fi reads
+      // as connected there. Just look again later.
+      Scheduler.schedule(:connWait, method(:onTick), next);
+      return;
+    }
+
+    if (WifiLte.hasDirectConnection()) {
       _mPending = false;
       hideLoader();
 
@@ -78,10 +96,6 @@ class ConnectionWait {
       App.getApp().runStartupWork();
       return;
     }
-
-    // System.getTimer() wraps around: the difference stays right where a
-    // direct comparison of the two moments would not.
-    var elapsed = System.getTimer() - _mStartedAt;
 
     if (elapsed >= MAX_WAIT) {
       // Give up: the stored states stay on screen, and from now on a
@@ -100,16 +114,12 @@ class ConnectionWait {
     } else if (!_mLoaderShown && !_mDismissed) {
       _mLoaderShown = true;
       App.getApp().viewController.showLoaderWithDelegate(
-        "Waiting for\nphone",
+        "Waiting for\nconnection",
         new ConnectionWaitDelegate(self)
       );
     }
 
-    Scheduler.schedule(
-      :connWait,
-      method(:onTick),
-      elapsed < FAST_PHASE ? POLL_INTERVAL : SLOW_POLL_INTERVAL
-    );
+    Scheduler.schedule(:connWait, method(:onTick), next);
   }
 
   // Back on the loader: show the stored entities, keep waiting quietly.

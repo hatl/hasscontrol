@@ -24,6 +24,11 @@ using Toybox.Timer;
 // replaces another, and each can be cancelled by itself. The timer is
 // never start()ed without a stop() first.
 //
+// While a Wi-Fi/LTE sync is pending (:fullmem, WifiLte.isSyncPending()),
+// the app may stay alive under the system sync screen, its jobs with it:
+// WifiLte.start() cancels :inactivity and the exits, and ConnectionWait
+// holds still until the sync is over.
+//
 // Do not create Timer.Timer objects anywhere else in the app.
 module Scheduler {
   // Connect IQ's shortest timer period (50 ms by default, device dependent).

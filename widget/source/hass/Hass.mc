@@ -598,22 +598,25 @@ module Hass {
     _refreshPendingEntities(null, null);
   }
 
-  // Without the phone every request of the chain fails, and the first
-  // "Phone not connected" error closes the app - a "Refresh on show" in
-  // onShow() would do that right while ConnectionWait waits for the phone,
-  // or when the system sync screen of a Wi-Fi/LTE action closes. So
-  // refreshAllEntities() does nothing then - silently: callers must not
-  // count on the refresh finishing, or on it removing a loader (see
-  // _buildImportedEntities()).
+  // Without a connection - the phone, or Wi-Fi that is up outside a sync
+  // as on Edge units (WifiLte.hasDirectConnection()) - every request of the
+  // chain fails, and the first "Phone not connected" error closes the app.
+  // A "Refresh on show" in onShow() would do that right while
+  // ConnectionWait waits for a connection, or when the system sync screen
+  // of a Wi-Fi/LTE action closes (startSync2() is documented to restart the
+  // app in sync mode, but in practice the app can stay alive under that
+  // screen). So refreshAllEntities() does nothing then - silently: callers
+  // must not count on the refresh finishing, or on it removing a loader
+  // (see _buildImportedEntities()).
   //
   // The trade-off: only the wait at launch (ConnectionWait) refreshes once
-  // the phone is there. After a disconnect later on, nothing refreshes by
-  // itself when the phone comes back - the stored states stay until the
+  // a connection is there. After a disconnect later on, nothing refreshes
+  // by itself when the phone comes back - the stored states stay until the
   // next refresh is asked for (Refresh on show, the menu, the next launch).
   // (:fullmem only - the 64 KB devices keep the old behavior.)
   (:fullmem)
   function _canRefresh() {
-    return System.getDeviceSettings().phoneConnected;
+    return WifiLte.hasDirectConnection();
   }
 
   (:lowmem)
@@ -840,7 +843,7 @@ module Hass {
   function selectOption(entity, option) {
     var params = { "option" => option };
 
-    // No phone: offer to send it over Wi-Fi/LTE (see WifiLte.mc).
+    // No connection: offer to send it over Wi-Fi/LTE (see WifiLte.mc).
     if (WifiLte.shouldUse()) {
       WifiLte.offerService(entity, "select_option", params, "Selecting\n" + option);
       return;
@@ -888,7 +891,7 @@ module Hass {
   function setInputNumberValue(entity, value) {
     var params = { "value" => value };
 
-    // No phone: offer to send it over Wi-Fi/LTE (see WifiLte.mc).
+    // No connection: offer to send it over Wi-Fi/LTE (see WifiLte.mc).
     if (WifiLte.shouldUse()) {
       WifiLte.offerService(
         entity,
@@ -940,6 +943,13 @@ module Hass {
       } else if (currentState == Entity.STATE_LOCKED) {
         action = Client.ENTITY_ACTION_UNLOCK;
         loadingText = "Unlocking";
+      } else {
+        // Locking, unlocking, jammed, open or unknown: no service fits.
+        // Without an action Client.setEntityState() falls back to
+        // lock/turn_on, which Home Assistant refuses (400) - via the phone,
+        // or only after a whole Wi-Fi/LTE sync.
+        App.getApp().viewController.showError("Lock is busy,\ntry again");
+        return;
       }
     } else if (entity.getType() == Entity.TYPE_VALVE) {
       if (currentState == Entity.STATE_OPEN) {
@@ -948,6 +958,10 @@ module Hass {
       } else if (currentState == Entity.STATE_CLOSED) {
         action = Client.ENTITY_ACTION_OPEN;
         loadingText = "Opening";
+      } else {
+        // Opening, closing or unknown: valve/turn_on, see the lock above.
+        App.getApp().viewController.showError("Valve is busy,\ntry again");
+        return;
       }
     } else if (entity.getType() == Entity.TYPE_COVER) {
       action = Client.ENTITY_ACTION_COVER_TOGGLE;
@@ -992,7 +1006,13 @@ module Hass {
       entityType = "input_button";
     }
 
-    // No phone: offer to send it over Wi-Fi/LTE instead (:fullmem, see
+    if (entityType == null) {
+      // TYPE_UNKNOWN: there is no service to call, via the phone or over
+      // Wi-Fi/LTE.
+      return;
+    }
+
+    // No connection: offer to send it over Wi-Fi/LTE instead (:fullmem, see
     // WifiLte.mc).
     if (_offerWifiLte(entity, entityType, action, loadingText)) {
       return;
@@ -1015,9 +1035,13 @@ module Hass {
       loadingText = "Activating";
     }
 
+    // "exit": "Close App after successful action" applies, as it does to a
+    // toggle sent via the phone (onToggleEntityStateCompleted()) - and, as
+    // there, not to a select option or number value (WifiLte.offerService()).
     var command = {
       "id" => entity.getId(),
-      "domain" => entityType
+      "domain" => entityType,
+      "exit" => true
     };
 
     // null for scenes - see Client.setEntityState(). Left out rather than

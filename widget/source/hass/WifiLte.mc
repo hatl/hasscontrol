@@ -10,11 +10,29 @@ using Utils;
 // Wi-Fi/LTE execution, after GarminHomeAssistant's
 // (https://github.com/house-of-abbey/GarminHomeAssistant/blob/main/Wi-Fi.md).
 //
-// A Connect IQ app reaches the network through the phone. Wi-Fi and LTE are
-// only switched on by the system "sync" (the one that uploads activities),
-// and only for as long as it runs. So when the phone is not connected, an
-// action is stored, a sync is requested, and HassSyncDelegate sends it to
-// Home Assistant from inside that sync.
+// A Connect IQ app reaches the network through the phone. On watches, Wi-Fi
+// and LTE are only switched on by the system "sync" (the one that uploads
+// activities), and only for as long as it runs. So when the phone is not
+// connected, an action is stored, a sync is requested, and HassSyncDelegate
+// sends it to Home Assistant from inside that sync.
+//
+// Edge head units differ: their Wi-Fi is up outside a sync too, whenever no
+// activity is recording. Requests then simply go out over it, as through
+// the phone, and none of this is needed - see hasDirectConnection().
+//
+// startSync2()/startSync() are documented to exit the app and relaunch it
+// in sync mode. In practice the app can stay alive under the system sync
+// screen instead (GarminHomeAssistant keeps its command in a static and
+// relies on that, on a Venu 2). Both have to work: the command is kept in
+// Application.Storage, prepare() builds what a fresh sync-mode process
+// lacks, and an app that stayed alive keeps its own timed work still while
+// the sync is pending (isSyncPending()).
+//
+// A stored command must never be left for some later sync to send unasked
+// - a manual one from the controls menu, an automatic one while charging.
+// It is cleared when the sync is cancelled (HassSyncDelegate.onStopSync()),
+// once it is older than COMMAND_MAX_AGE (getPendingCommand(), and the
+// watchdog expire()), and at the next normal launch (dropStaleCommand()).
 //
 // Limits, the same as GarminHomeAssistant's:
 //  * Actions only. Entity states are not refreshed over Wi-Fi/LTE - the
@@ -23,6 +41,10 @@ using Utils;
 //  * https only, and the watch then does TLS itself: some models offer no
 //    cipher suite with forward secrecy, which many servers refuse.
 //    A loopback http:// host (a proxy on the phone) cannot be reached.
+//  * Whether an access point is in range only turns out in the sync.
+//    Communications.checkWifiConnection() (CIQ 3.2.0) could find out
+//    beforehand, but is not used: it is a round trip of its own, so the
+//    question would only come up after yet more waiting.
 //
 // :fullmem only, see monkey.jungle.
 (:fullmem)
@@ -30,25 +52,63 @@ module WifiLte {
   const STORAGE_KEY = "Hass/wifiLteCommand";
 
   // A stored command older than this is dropped instead of sent. The sync
-  // starts right after the user confirms, so anything older belongs to one
-  // that never ran - and must not, say, unlock a door hours later on some
-  // automatic sync (e.g. while charging).
-  const COMMAND_MAX_AGE = 120; // seconds
+  // starts right after the user confirms, and joining Wi-Fi takes 5-8 s, so
+  // anything older belongs to one that never ran - and must not, say,
+  // unlock a door later on some automatic sync (e.g. while charging).
+  const COMMAND_MAX_AGE = 60; // seconds
+
+  // How young a command has to be to survive the sweep at launch, see
+  // dropStaleCommand().
+  const LAUNCH_GRACE = 15; // seconds
 
   // Exiting right after notifySyncComplete() makes the system report the
   // sync as failed; GarminHomeAssistant settled on this delay.
   const EXIT_DELAY = 5000; // ms
 
   var _syncActive = false;
+  var _syncPending = false;
+
+  // True when the sync runs in a process started in sync mode just for it,
+  // see prepare() and onSyncFinished().
+  var _headless = false;
 
   function isEnabled() {
     return Utils.getProperty("wifiLteExecution", false) == true;
   }
 
-  // True when an action has to go out over Wi-Fi/LTE: the phone is not
-  // connected, the user allowed it, and the watch has a radio for it.
+  // True when a request can go out right away, without a sync: the phone is
+  // connected - or Wi-Fi is. On watches Wi-Fi only reads as connected during
+  // a sync. Edge head units keep it up whenever no activity is recording:
+  // their device models list `wifiExclusions: ['fitRecording']`, Garmin
+  // staff say so on the forum, and makeWebRequest() "can be used when
+  // connected to WiFi". Verified only that far - not on an Edge.
+  function hasDirectConnection() {
+    return hasDirectConnectionIn(System.getDeviceSettings());
+  }
+
+  // hasDirectConnection() for a System.DeviceSettings already at hand:
+  // every getDeviceSettings() call builds a new one.
+  function hasDirectConnectionIn(settings) {
+    if (settings.phoneConnected) {
+      return true;
+    }
+
+    if (!(settings has :connectionInfo) || settings.connectionInfo == null) {
+      return false;
+    }
+
+    var wifi = settings.connectionInfo[:wifi];
+
+    return wifi != null && wifi.state == System.CONNECTION_STATE_CONNECTED;
+  }
+
+  // True when an action has to go out over Wi-Fi/LTE: there is no direct
+  // connection (then that is used instead), the user allowed it, and the
+  // watch has a radio for it.
   function shouldUse() {
-    if (!isEnabled() || System.getDeviceSettings().phoneConnected) {
+    var settings = System.getDeviceSettings();
+
+    if (!isEnabled() || hasDirectConnectionIn(settings)) {
       return false;
     }
 
@@ -60,14 +120,15 @@ module WifiLte {
       return false;
     }
 
-    return hasRadio();
+    return hasRadio(settings);
   }
 
-  // Whether Wi-Fi or LTE is set up on the watch. Whether an access point is
-  // in range cannot be checked from here - only the sync finds out.
-  function hasRadio() {
-    var settings = System.getDeviceSettings();
-
+  // Whether Wi-Fi or LTE is set up on the watch - not whether it will work.
+  // An access point in range only turns out in the sync (see the top of
+  // this file). And some firmware reports a Wi-Fi that is switched off as
+  // NOT_CONNECTED rather than NOT_INITIALIZED, so the question can come up
+  // with Wi-Fi off - the sync then fails.
+  function hasRadio(settings) {
     if (!(settings has :connectionInfo) || settings.connectionInfo == null) {
       return false;
     }
@@ -92,14 +153,26 @@ module WifiLte {
     _syncActive = active;
   }
 
+  // True from start() until the sync has finished (onSyncFinished()) or the
+  // watchdog has given up on it (expire()). If the app stays alive under the
+  // system sync screen (see the top of this file), its own timed work has
+  // to keep still meanwhile: no loader, no startup requests (see
+  // ConnectionWait.onTick()) - view pushes during a sync are reported on
+  // Garmin's forum to fail on the device.
+  function isSyncPending() {
+    return _syncPending;
+  }
+
   // Asks before switching the radio on: it is slow, costs battery, and the
   // system sync screen takes over the watch meanwhile.
   //
   // `command` is what HassSyncDelegate.onStartSync() sends: "id" and
   // "domain", plus either "action" (a Client.ENTITY_ACTION_*, sent through
   // Client.setEntityState()) or "service" and "params" (sent through
-  // Client.callService()). `text` says what is about to happen, e.g.
-  // "Unlocking\nFront Door"; it is also shown on the sync screen.
+  // Client.callService()). Optionally "exit" => true: "Close App after
+  // successful action" applies (see onSyncFinished()). `text` says what is
+  // about to happen, e.g. "Unlocking\nFront Door"; it is also shown on the
+  // sync screen.
   function offer(command, text) {
     command["msg"] = text;
 
@@ -120,21 +193,59 @@ module WifiLte {
     }, text);
   }
 
+  // The user confirmed `command`: stores it now, and starts the sync a
+  // moment later (see WifiLteConfirmDelegate.onResponse()).
   function start(command) {
     command["at"] = Time.now().value();
 
-    // Stored, not just kept in memory: startSync2() restarts the app in
+    // Stored, not just kept in memory: startSync2() may restart the app in
     // sync mode, where only Application.Storage carries over.
     App.Storage.setValue(STORAGE_KEY, command);
+    _syncPending = true;
 
-    // The inactivity auto-close must not end the app halfway through.
+    // Neither the inactivity auto-close nor any other timed exit may end
+    // the app halfway through.
     Scheduler.cancel(:inactivity);
+    Scheduler.cancel(:exitPhoneLost);
+    Scheduler.cancel(:exitAfterAction);
+
+    // Should the sync never get to this app, nothing else would end the
+    // wait - see expire().
+    Scheduler.schedule(:wifiLteExpire, new Lang.Method(WifiLte, :expire), COMMAND_MAX_AGE * 1000);
+
+    Scheduler.schedule(:wifiLteStart, new Lang.Method(WifiLte, :launchSync), Scheduler.MIN_DELAY);
+  }
+
+  // The second half of start(), off the Scheduler.
+  function launchSync() {
+    var command = getPendingCommand();
+
+    if (command == null) {
+      return;
+    }
 
     if (Communications has :startSync2) {
       Communications.startSync2({ :message => command["msg"] });
     } else {
+      // Below CIQ 4.0.4: the sync screen shows the system's own text.
       Communications.startSync();
     }
+  }
+
+  // The watchdog start() schedules. By now the sync should long be over, so
+  // if it has not started at all - the system did not start it, or it was
+  // cancelled before it got to this app - the command is dropped, so that no
+  // later sync can send it, and the app may close on inactivity again. A
+  // request still out is left alone: its response, or onStopSync(), ends
+  // the sync.
+  function expire() {
+    if (isSyncActive()) {
+      return;
+    }
+
+    clearPendingCommand();
+    _syncPending = false;
+    App.getApp().resetInactivityTimer();
   }
 
   // The command waiting for a sync, or null. Expired ones are dropped.
@@ -145,15 +256,47 @@ module WifiLte {
       return null;
     }
 
-    var at = command["at"];
-    var age = at != null ? Time.now().value() - at : null;
+    var age = _ageOf(command);
 
-    if (age == null || age < 0 || age > COMMAND_MAX_AGE) {
+    if (age == null || age > COMMAND_MAX_AGE) {
       clearPendingCommand();
       return null;
     }
 
     return command;
+  }
+
+  // The sweep at launch (HassControlApp.startStartupWork()). A normal launch
+  // that finds a command stored means the sync it was meant for never ran -
+  // the system did not start it, or the app was closed first - so it is
+  // dropped. Only one younger than LAUNCH_GRACE is kept: the SDK does not
+  // say whether a sync-mode relaunch (which startSync2() may do) calls
+  // getInitialView(). If it does, that comes right after start(), and the
+  // sync still has to find the command. Returns true when one was kept.
+  function dropStaleCommand() {
+    var command = App.Storage.getValue(STORAGE_KEY);
+
+    if (command == null) {
+      return false;
+    }
+
+    var age = _ageOf(command);
+
+    if (age != null && age < LAUNCH_GRACE) {
+      return true;
+    }
+
+    clearPendingCommand();
+    return false;
+  }
+
+  // Seconds since `command` was stored, or null when that cannot be told:
+  // no time stamp, or the clock has gone back since.
+  function _ageOf(command) {
+    var at = command["at"];
+    var age = at != null ? Time.now().value() - at : null;
+
+    return age != null && age >= 0 ? age : null;
   }
 
   function hasStoredCommand() {
@@ -164,13 +307,15 @@ module WifiLte {
     App.Storage.deleteValue(STORAGE_KEY);
   }
 
-  // startSync2() restarts the app in sync mode: onStartSync() may then run
-  // in a process where getInitialView() never did. Builds what the request
-  // path relies on.
+  // onStartSync() may run in a process where getInitialView() never did:
+  // startSync2() may restart the app in sync mode. Builds what the request
+  // path relies on - and notes whether that was the case (_headless).
   function prepare() {
     var app = App.getApp();
 
-    if (app.viewController == null) {
+    _headless = app.viewController == null;
+
+    if (_headless) {
       // OAuthClient reports every token response to it (showLoginView()).
       app.viewController = new ViewController();
     }
@@ -223,7 +368,7 @@ module WifiLte {
   }
 
   // For notifySyncComplete(): the reason, with the response code where
-  // there is one - e.g. 0 for a TLS handshake the server refused.
+  // there is one - e.g. 0, usually a TLS handshake the server refused.
   function describeError(error) {
     if (error instanceof Error) {
       var text = error.toShortString();
@@ -238,8 +383,21 @@ module WifiLte {
     return error.toString();
   }
 
-  function onSyncFinished(success) {
-    if (success && Utils.getProperty("closeAfterAction", false)) {
+  // After notifySyncComplete(). `success`: the action was carried out.
+  // `exitAfter`: the command was a toggle, which "Close App after successful
+  // action" applies to - as via the phone, where it does not apply to select
+  // options or number values either (see Hass._offerWifiLte()).
+  function onSyncFinished(success, exitAfter) {
+    _syncPending = false;
+    Scheduler.cancel(:wifiLteExpire);
+
+    if (_headless) {
+      // A process started in sync mode just for this sync ends on its own:
+      // there is no view to update, and no app to close.
+      return;
+    }
+
+    if (success && exitAfter && Utils.getProperty("closeAfterAction", false)) {
       Scheduler.schedule(:exitAfterSync, new Lang.Method(Hass, :exitApplication), EXIT_DELAY);
     } else {
       App.getApp().resetInactivityTimer();
@@ -262,6 +420,12 @@ class WifiLteConfirmDelegate extends Ui.ConfirmationDelegate {
     App.getApp().resetInactivityTimer();
 
     if (response == Ui.CONFIRM_YES) {
+      // The command is stored right away, but start() leaves startSync2()
+      // to the Scheduler, as LockConfirmDelegate does with its toggle: the
+      // system pops this Confirmation only after onResponse() returns, and
+      // the sync screen is to come up over the app's own view.
+      // GarminHomeAssistant calls startSync2() right from here, which works
+      // on a Venu 2; how a widget fares either way on CIQ 3.x is untested.
       WifiLte.start(_mCommand);
     }
 
@@ -273,48 +437,72 @@ class WifiLteConfirmDelegate extends Ui.ConfirmationDelegate {
 (:fullmem)
 class HassSyncDelegate extends Communications.SyncDelegate {
   hidden var _mDone;
+  hidden var _mExit;
 
   function initialize() {
     SyncDelegate.initialize();
     _mDone = false;
+    _mExit = false;
   }
 
-  // Asked before every sync, the automatic ones included: only a pending
-  // command needs one.
+  // Asked before a sync - presumably before the automatic ones too, which
+  // the SDK does not say: only a pending command needs one.
   function isSyncNeeded() {
     return WifiLte.getPendingCommand() != null;
   }
 
   function onStartSync() {
-    var expired = WifiLte.hasStoredCommand();
-    var command = WifiLte.getPendingCommand();
-
-    // Off the store before anything can fail, so that no later sync can
-    // ever send it a second time.
-    WifiLte.clearPendingCommand();
-
-    if (command == null) {
-      // A stored but expired command means the sync took too long to start.
-      finish(expired ? "Request expired" : null, false);
+    if (_mDone) {
+      // This delegate's sync is over already (onStopSync() came first), so
+      // nothing may go out any more. getSyncDelegate() hands out a new
+      // delegate whenever it is asked; should the system reuse one for a
+      // further sync, that sync sends nothing - the safe way to fail.
+      WifiLte.clearPendingCommand();
       return;
     }
 
-    WifiLte.prepare();
+    // Whatever fails in here, the system has to hear that the sync is over:
+    // its screen waits for notifySyncComplete().
+    try {
+      var expired = WifiLte.hasStoredCommand();
+      var command = WifiLte.getPendingCommand();
 
-    if (!Hass.client.isLoggedIn()) {
-      finish("Not logged in", false);
-      return;
-    }
+      // Off the store before anything can fail, so that no later sync can
+      // ever send it a second time.
+      WifiLte.clearPendingCommand();
 
-    WifiLte.setSyncActive(true);
-    Communications.notifySyncProgress(10);
+      if (command == null) {
+        // A stored but expired command means the sync took too long to
+        // start.
+        finish(expired ? "Request expired" : "Nothing to send", false);
+        return;
+      }
 
-    var callback = method(:onResponse);
+      _mExit = command["exit"] == true;
 
-    if (command["service"] != null) {
-      Hass.client.callService(command["domain"], command["service"], command["id"], command["params"], callback);
-    } else {
-      Hass.client.setEntityState(command["id"], command["domain"], command["action"], callback);
+      WifiLte.prepare();
+
+      if (!Hass.client.isLoggedIn()) {
+        finish("Not logged in", false);
+        return;
+      }
+
+      WifiLte.setSyncActive(true);
+      Communications.notifySyncProgress(10);
+
+      var callback = method(:onResponse);
+
+      if (command["service"] != null) {
+        Hass.client.callService(command["domain"], command["service"], command["id"], command["params"], callback);
+      } else {
+        Hass.client.setEntityState(command["id"], command["domain"], command["action"], callback);
+      }
+    } catch (e) {
+      // Unless it was finish() itself that failed.
+      if (!_mDone) {
+        var message = e.getErrorMessage();
+        finish(message != null ? message : "Sync failed", false);
+      }
     }
   }
 
@@ -324,6 +512,22 @@ class HassSyncDelegate extends Communications.SyncDelegate {
     }
 
     if (error != null) {
+      var code = data != null ? data[:responseCode] : null;
+
+      // The request went out and Home Assistant answered - only the answer
+      // could not be read: too large, or not what was expected. Home
+      // Assistant replies to an action with every state it changed, which
+      // can be more than the watch can take. So the action has most likely
+      // been carried out; what it changed is unknown.
+      if (
+        code == Communications.NETWORK_RESPONSE_OUT_OF_MEMORY
+        || code == Communications.NETWORK_RESPONSE_TOO_LARGE
+        || code == Communications.INVALID_HTTP_BODY_IN_NETWORK_RESPONSE
+      ) {
+        finish("Sent, reply\nunreadable", true);
+        return;
+      }
+
       finish(WifiLte.describeError(error), false);
       return;
     }
@@ -334,6 +538,10 @@ class HassSyncDelegate extends Communications.SyncDelegate {
 
   // The user cancelled the sync, or the system ended it.
   function onStopSync() {
+    // Whatever else happens: the command must not be left for the next sync
+    // to send unasked.
+    WifiLte.clearPendingCommand();
+
     if (_mDone) {
       return;
     }
@@ -345,7 +553,7 @@ class HassSyncDelegate extends Communications.SyncDelegate {
       Hass.client.onRequestsCancelled();
     }
 
-    finish(null, false);
+    finish("Cancelled", false);
   }
 
   // `error` is shown by the system sync screen (null: no error); `success`
@@ -357,6 +565,11 @@ class HassSyncDelegate extends Communications.SyncDelegate {
     Communications.notifySyncProgress(100);
     Communications.notifySyncComplete(error);
 
-    WifiLte.onSyncFinished(success);
+    // Caught: the app's own follow-up must not take the sync down with it.
+    try {
+      WifiLte.onSyncFinished(success, _mExit);
+    } catch (e) {
+      Utils.debugLog("onSyncFinished: ", e.getErrorMessage(), null);
+    }
   }
 }

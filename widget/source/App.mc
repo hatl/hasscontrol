@@ -15,7 +15,8 @@ class HassControlApp extends App.AppBase {
   var viewController;
   var menu;
 
-  // The wait for the phone at launch, see startStartupWork(). :fullmem only.
+  // The wait for a connection at launch, see startStartupWork(). :fullmem
+  // only.
   (:fullmem)
   hidden var _connectionWait = null;
 
@@ -175,9 +176,9 @@ class HassControlApp extends App.AppBase {
     }
 
     // Only now that the view is chosen: BaseView (devices without glances)
-    // is the widget's own page in the widget loop. A "Waiting for phone"
-    // loader pushed over it would take up/down and so block scrolling on
-    // through the loop - the wait runs without one there (see
+    // is the widget's own page in the widget loop. A "Waiting for
+    // connection" loader pushed over it would take up/down and so block
+    // scrolling on through the loop - the wait runs without one there (see
     // ConnectionWait).
     startStartupWork(!(view instanceof BaseView));
 
@@ -194,7 +195,7 @@ class HassControlApp extends App.AppBase {
 
   // The requests every launch starts with: the state refresh (or the group
   // import) and the battery report. Called from getInitialView() - or, on
-  // :fullmem, by ConnectionWait once the phone is connected.
+  // :fullmem, by ConnectionWait once there is a connection.
   function runStartupWork() {
     if (isLoggedIn()) {
       if (Hass.getEntities().size() == 0 && Hass.getGroup() != null) {
@@ -218,12 +219,25 @@ class HassControlApp extends App.AppBase {
     }
   }
 
-  // Without the phone every startup request fails, and the "Phone not
-  // connected" error closes the app 2.5 s later. Instead, wait for the phone
-  // and start once it is there (see ConnectionWait) - behind a "Waiting for
-  // phone" loader, unless `showLoader` is false (see getInitialView()).
+  // Without a connection every startup request fails, and the "Phone not
+  // connected" error closes the app 2.5 s later. Instead, wait for one - the
+  // phone, or Wi-Fi up outside a sync as on Edge units
+  // (WifiLte.hasDirectConnection()) - and start once it is there (see
+  // ConnectionWait), behind a "Waiting for connection" loader unless
+  // `showLoader` is false (see getInitialView()).
+  //
+  // First of all, this is also the sweep at launch for a Wi-Fi/LTE command
+  // left over from a sync that never ran (WifiLte.dropStaleCommand()).
   (:fullmem)
   hidden function startStartupWork(showLoader) {
+    if (WifiLte.dropStaleCommand()) {
+      // A command stored seconds ago: most likely this launch is the
+      // sync-mode relaunch startSync2() may do (see WifiLte.mc). Wi-Fi reads
+      // as connected in a sync, so the startup requests would go out right
+      // away, next to the sync's own and in a process that ends with it.
+      return;
+    }
+
     var batteryId = Utils.getProperty("report_battery_id", "");
 
     if (!isLoggedIn() && (batteryId == null || batteryId.length() == 0)) {
@@ -231,7 +245,7 @@ class HassControlApp extends App.AppBase {
       return;
     }
 
-    if (System.getDeviceSettings().phoneConnected) {
+    if (WifiLte.hasDirectConnection()) {
       runStartupWork();
       return;
     }
@@ -245,11 +259,11 @@ class HassControlApp extends App.AppBase {
     runStartupWork();
   }
 
-  // Whether the wait for the phone at launch is still going on. Meanwhile a
-  // "Phone not connected" error must not close the app (see
+  // Whether the wait for a connection at launch is still going on. Meanwhile
+  // a "Phone not connected" error must not close the app (see
   // Error.initialize()): that would end the wait, which refreshes once the
-  // phone is back. False once the phone has connected or the wait has given
-  // up - and when there was none (phone connected at launch, sync mode).
+  // phone is back. False once connected or once the wait has given up - and
+  // when there was none (connected at launch, sync mode).
   (:fullmem)
   function isWaitingForPhone() {
     return _connectionWait != null && _connectionWait.isPending();
@@ -260,10 +274,13 @@ class HassControlApp extends App.AppBase {
     return false;
   }
 
-  // Wi-Fi/LTE execution (see WifiLte.mc). The system asks for this before
-  // every sync - the automatic ones too, e.g. while charging - and
-  // HassSyncDelegate.isSyncNeeded() declines those unless a command is
-  // pending.
+  // Wi-Fi/LTE execution (see WifiLte.mc). startSync2() is documented to
+  // relaunch the app in sync mode, where the system then asks for this - in
+  // practice the app can also stay alive and be asked without a relaunch.
+  // Presumably the system asks before the automatic syncs as well, e.g.
+  // while charging; that is not verified (the SDK does not say), so
+  // HassSyncDelegate.isSyncNeeded() declines any sync unless a command is
+  // pending - and a command never outlives the sync it was meant for.
   (:fullmem)
   function getSyncDelegate() {
     if (!WifiLte.isEnabled()) {

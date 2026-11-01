@@ -13,8 +13,8 @@ The widget supports various Home Assistant entity types and handles both OAuth a
 - `hass/OAuthClient.mc`: Handles OAuth authentication flow
 - `hass/OauthCredentials.mc`: Manages storage and retrieval of authentication tokens
 - `Scheduler.mc`: The app's only `Timer.Timer`; every delayed callback is a keyed job on it (see Performance Considerations)
-- `ConnectionWait.mc` (fullmem): At launch without the phone, shows "Waiting for phone" and runs the startup requests once it connects; gives up after 3 minutes. No loader when Wi-Fi/LTE execution is usable or the initial view is `BaseView` (the widget-loop page on devices without glances, where a loader would block scrolling the loop) - the wait then runs quietly and still refreshes on connect. While it is pending, "Phone not connected" does not close the app (`HassControlApp.isWaitingForPhone()`, checked in `Error.initialize()`)
-- `hass/WifiLte.mc` (fullmem): Wi-Fi/LTE execution - stores an action, starts a system sync, and `HassSyncDelegate` sends it from inside the sync
+- `ConnectionWait.mc` (fullmem): At launch without a direct connection (`WifiLte.hasDirectConnection()`: the phone, or Wi-Fi up outside a sync as on Edge units), shows "Waiting for connection" and runs the startup requests once there is one; gives up after 3 minutes. No loader when Wi-Fi/LTE execution is usable or the initial view is `BaseView` (the widget-loop page on devices without glances, where a loader would block scrolling the loop) - the wait then runs quietly and still refreshes on connect. While a Wi-Fi/LTE sync is pending (`WifiLte.isSyncPending()`) it only reschedules itself. While the wait is pending, "Phone not connected" does not close the app (`HassControlApp.isWaitingForPhone()`, checked in `Error.initialize()`)
+- `hass/WifiLte.mc` (fullmem): Wi-Fi/LTE execution - stores an action, starts a system sync (deferred off the Confirmation callback, `:wifiLteStart`), and `HassSyncDelegate` sends it from inside the sync. The stored command must never be sent by a later sync without a prompt: it is cleared when the sync is cancelled (`onStopSync()`), after `COMMAND_MAX_AGE` (60 s; also by the `:wifiLteExpire` watchdog) and at the next normal launch (`dropStaleCommand()`, from `HassControlApp.startStartupWork()`). `hasDirectConnection()` (the phone, or a connected Wi-Fi radio - on watches only during a sync, on Edge units whenever no activity records) is what `Client.hasConnection()`, `Hass._canRefresh()` and `ConnectionWait` check; with one, Wi-Fi/LTE execution is not offered (`shouldUse()`)
 - `Lock/LockConfirm.mc`, `Lock/PinEntryView.mc` (fullmem): The optional yes/no question or wallet-style PIN before a lock is toggled
 
 # Code Style Guidelines
@@ -89,7 +89,7 @@ When adding a new entity type:
 - Use timers judiciously to avoid excessive battery drain
 - Never create a `Timer.Timer`: schedule a keyed job with `Scheduler.schedule(:key, method, ms)` and drop it with `Scheduler.cancel(:key)`. Connect IQ allows only a few running timers (3 by default) and throws "Too Many Timers Error" past that (issue #101); rescheduling a key moves its deadline instead of adding a timer
 - Give every purpose its own key, as a key's last schedule replaces the job before it: the app exits are `:exitPhoneLost` (`Error.mc`), `:exitAfterAction` (`Hass.mc`) and `:exitAfterSync` (`WifiLte.mc`), so none replaces or cancels another
-- A Wi-Fi/LTE sync (`startSync2()`) may restart the app in sync mode, where `getInitialView()` never ran: code reachable from `HassSyncDelegate` must not assume views, `viewController` or a loaded entity list (see `WifiLte.prepare()`)
+- A Wi-Fi/LTE sync (`startSync2()`) is documented to restart the app in sync mode, where `getInitialView()` never ran: code reachable from `HassSyncDelegate` must not assume views, `viewController` or a loaded entity list (see `WifiLte.prepare()`, which also sets `_headless`: then `onSyncFinished()` neither updates the UI nor schedules an exit or the inactivity timer - that process ends on its own). In practice the app can also stay alive under the sync screen: while `WifiLte.isSyncPending()`, no timed work may push views or start requests (`WifiLte.start()` cancels `:inactivity`, `:exitPhoneLost` and `:exitAfterAction`)
 - Set appropriate refresh intervals for transitional states
 - Clean up resources (especially timers) when views are hidden or app is closed
 - Prefer batch operations over multiple individual API calls
@@ -113,7 +113,7 @@ When adding a new entity type:
 
 # Sync and Data Management
 - Use efficient entity synchronization with Home Assistant
-- On fullmem, `Hass.refreshAllEntities()` silently does nothing while the phone is not connected (`_canRefresh()`): callers must not rely on the refresh finishing or on it removing a loader (see `Hass._buildImportedEntities()`). Only `ConnectionWait` refreshes once the phone is back, and only at launch
+- On fullmem, `Hass.refreshAllEntities()` silently does nothing without a direct connection (`_canRefresh()`, `WifiLte.hasDirectConnection()`): callers must not rely on the refresh finishing or on it removing a loader (see `Hass._buildImportedEntities()`). Only `ConnectionWait` refreshes once the connection is back, and only at launch
 - Support group-based entity import from Home Assistant
 - Handle transitional states with appropriate refresh timers
 - Store entities for offline access

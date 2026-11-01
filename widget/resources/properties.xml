@@ -39,7 +39,7 @@
        <string id="lockConfirmation_yesNo">Yes/no question</string>
        <string id="lockConfirmation_pin">PIN</string>
        <string id="lockPin_title">Lock PIN (4 digits)</string>
-       <string id="wifiLteExecution_title">Send actions over Wi-Fi/LTE when the phone is not connected</string>
+       <string id="wifiLteExecution_title">Send actions over Wi-Fi/LTE when the phone is not connected (watches with the sync API only; not on low-memory watches)</string>
     </strings>
 
     <settings>
