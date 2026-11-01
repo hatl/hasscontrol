@@ -19,6 +19,9 @@ module Hass {
         hidden var _isFetchingAccessToken;
         hidden var _additionalHeaderKey;
         hidden var _additionalHeaderValue;
+        // Context of the request in flight inside a Wi-Fi/LTE sync - see
+        // doAuthenticatedWebRequest() and onSyncWebResponse().
+        (:fullmem) hidden var _syncContext;
 
         function initialize(options) {
             Comm.registerForOAuthMessages(method(:onReceiveCode));
@@ -33,6 +36,7 @@ module Hass {
             _isFetchingAccessToken = false;
             _additionalHeaderKey = Utils.getProperty("additional_header_key", "");
             _additionalHeaderValue = Utils.getProperty("additional_header_value", "");
+            setSyncContext(null);
         }
 
         function onSettingsChanged() {
@@ -94,6 +98,7 @@ module Hass {
         function onRequestsCancelled() {
             _isFetchingAccessToken = false;
             _tokenCallbacks = new [0];
+            setSyncContext(null);
         }
 
         function _setIsLoggingIn(isLoggingIn) {
@@ -325,12 +330,71 @@ module Hass {
                 Utils.debugLogRequest("REQUEST", context[:url], context[:parameters]);
             }
 
+            // Inside a Wi-Fi/LTE sync the system calls the response callback with two arguments
+            // even though :context is set, and a three-parameter callback then dies with "Not
+            // Enough Arguments Error" - taking the whole sync with it. So in a sync the context is
+            // not handed to the system at all: it is kept here and a two-parameter callback picks
+            // it up. Only one request is ever in flight there (the single stored action), so one
+            // field is enough. Everywhere else :context is used as before.
+            if (useSyncCallback()) {
+                setSyncContext(options[:context]);
+                options.remove(:context);
+
+                Comm.makeWebRequest(
+                    context[:url],
+                    context[:parameters],
+                    options,
+                    method(:onSyncWebResponse)
+                );
+                return;
+            }
+
             Comm.makeWebRequest(
                 context[:url],
                 context[:parameters],
                 options,
                 method(:onWebResponse)
             );
+        }
+
+        // The two-parameter form of onWebResponse() used inside a Wi-Fi/LTE sync.
+        (:fullmem)
+        function onSyncWebResponse(responseCode, body) {
+            var context = _syncContext;
+
+            setSyncContext(null);
+
+            if (context == null) {
+                // A response with nothing waiting for it: the sync was cancelled, or this is a
+                // second callback for the same request.
+                Utils.logMem("onSyncWebResponse without context", responseCode);
+                return;
+            }
+
+            onWebResponse(responseCode, body, context);
+        }
+
+        (:lowmem)
+        function onSyncWebResponse(responseCode, body) {
+        }
+
+        (:fullmem)
+        hidden function useSyncCallback() {
+            return WifiLte.isSyncActive();
+        }
+
+        (:lowmem)
+        hidden function useSyncCallback() {
+            return false;
+        }
+
+        (:fullmem)
+        hidden function setSyncContext(context) {
+            _syncContext = context;
+        }
+
+        (:lowmem)
+        hidden function setSyncContext(context) {
         }
 
         function makeAuthenticatedWebRequest(url, parameters, options, responseCallback) {
