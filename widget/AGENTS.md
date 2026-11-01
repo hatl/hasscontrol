@@ -12,6 +12,7 @@ The widget supports various Home Assistant entity types and handles both OAuth a
 - `hass/Constants.mc`: Constants for entity types, states, and errors
 - `hass/OAuthClient.mc`: Handles OAuth authentication flow
 - `hass/OauthCredentials.mc`: Manages storage and retrieval of authentication tokens
+- `Scheduler.mc`: The app's only `Timer.Timer`; every delayed callback is a keyed job on it (see Performance Considerations)
 
 # Code Style Guidelines
 
@@ -82,6 +83,7 @@ When adding a new entity type:
 - Minimize API calls to preserve battery life (Garmin watches have limited battery)
 - Cache entities and other data whenever possible using `App.Storage`
 - Use timers judiciously to avoid excessive battery drain
+- Never create a `Timer.Timer`: schedule a keyed job with `Scheduler.schedule(:key, method, ms)` and drop it with `Scheduler.cancel(:key)`. Connect IQ allows only a few running timers (3 by default) and throws "Too Many Timers Error" past that (issue #101); rescheduling a key moves its deadline instead of adding a timer
 - Set appropriate refresh intervals for transitional states
 - Clean up resources (especially timers) when views are hidden or app is closed
 - Prefer batch operations over multiple individual API calls

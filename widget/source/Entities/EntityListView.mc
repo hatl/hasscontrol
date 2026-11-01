@@ -1,6 +1,5 @@
 using Toybox.Application as App;
 using Toybox.WatchUi as Ui;
-using Toybox.Timer;
 using Hass;
 using Utils;
 
@@ -266,8 +265,6 @@ class EntityListDelegate extends Ui.BehaviorDelegate {
 class EntityListView extends Ui.View {
   hidden var _mController;
   hidden var _mLastIndex;
-  hidden var _mTimer;
-  hidden var _mTimerActive;
   hidden var _mShowBar;
   hidden var _mIconCache; // entityId => { :drawable, :type, :state, :sensorClass, :icon, :deviceClass }
 
@@ -275,8 +272,6 @@ class EntityListView extends Ui.View {
     View.initialize();
     _mController = controller;
     _mLastIndex = null;
-    _mTimer = new Timer.Timer();
-    _mTimerActive = false;
     _mShowBar = false;
     _mIconCache = {};
   }
@@ -292,11 +287,11 @@ class EntityListView extends Ui.View {
   }
 
   function onHide() {
-    // Stop timer when view is hidden to prevent orphaned timer callbacks
-    if (_mTimerActive) {
-      _mTimer.stop();
-      _mTimerActive = false;
-    }
+    // Drop the pending bar hide so it cannot fire on a view that is gone.
+    // The bar goes with it: left on, it would stay up for good, as nothing
+    // reschedules its hide until the index changes again.
+    Scheduler.cancel(:pageBar);
+    _mShowBar = false;
   }
 
   function drawNoEntityText(dc) {
@@ -748,24 +743,21 @@ class EntityListView extends Ui.View {
   }
 
   function onTimerDone() {
-    _mTimerActive = false;
     _mShowBar = false;
     Ui.requestUpdate();
   }
 
+  // Shows the page bar on every index change and hides it a second after
+  // the last one. _mTimerActive used to guard this, but nothing ever set it,
+  // so every scroll start()ed the still-running bar timer again - one of
+  // the timers behind "Too Many Timers Error" (issue #101). Rescheduling the
+  // keyed job just moves the hide.
   function shouldShowBar() {
     var index = _mController.getIndex();
 
-    if (_mTimerActive && _mShowBar == true) {
-      return;
-    }
-
     if (_mLastIndex != index) {
-      if (_mTimerActive) {
-        _mTimer.stop();
-      }
       _mShowBar = true;
-      _mTimer.start(method(:onTimerDone), 1000, false);
+      Scheduler.schedule(:pageBar, method(:onTimerDone), 1000);
     }
 
     _mLastIndex = index;

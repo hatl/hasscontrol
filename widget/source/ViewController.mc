@@ -1,6 +1,5 @@
 using Toybox.WatchUi as Ui;
 using Toybox.Application as App;
-using Toybox.Timer;
 using Toybox.Time;
 
 using Hass;
@@ -14,12 +13,10 @@ class ViewController {
   hidden var _loginView;
   hidden var _loginDelegate;
   hidden var _loaderActive;
-  hidden var _loaderTimer;
   hidden var _sceneController;
 
   function initialize() {
     _loaderActive = null;
-    _loaderTimer = new Timer.Timer();
   }
 
   // The progress, error and login views are built on first use. Allocating all
@@ -247,6 +244,10 @@ class ViewController {
   }
 
   function showLoader(text) {
+    // A delayed removal still pending belongs to the previous loader - left
+    // to run it would close this one before its request has completed.
+    Scheduler.cancel(:loader);
+
     if (isShowingLoader()) {
       Ui.popView(Ui.SLIDE_IMMEDIATE);
     }
@@ -265,7 +266,9 @@ class ViewController {
     if (isShowingLoader()) {
       // if loader is about to close too soon, we need to delay it
       if (Time.now().add(new Time.Duration(-1)).lessThan(_loaderActive)) {
-        _loaderTimer.start(method(:removeLoader), 500, false);
+        // Keyed: calling this again while a removal is pending moves that
+        // removal instead of starting a second timer (issue #101).
+        Scheduler.schedule(:loader, method(:removeLoader), 500);
         return;
       }
 
@@ -276,6 +279,8 @@ class ViewController {
   }
 
   function removeLoaderImmediate() {
+    Scheduler.cancel(:loader);
+
     if (isShowingLoader()) {
       Ui.popView(Ui.SLIDE_BLINK);
     }

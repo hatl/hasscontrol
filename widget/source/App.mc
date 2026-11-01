@@ -1,7 +1,6 @@
 using Toybox.Application as App;
 using Toybox.Communications as Comm;
 using Toybox.WatchUi as Ui;
-using Toybox.Timer;
 using Toybox.System;
 using Hass;
 using Utils;
@@ -15,11 +14,9 @@ class HassControlApp extends App.AppBase {
 
   var viewController;
   var menu;
-  var _inactivityTimer;
 
   function initialize() {
     AppBase.initialize();
-    _inactivityTimer = new Timer.Timer();
   }
 
   /*
@@ -209,14 +206,13 @@ class HassControlApp extends App.AppBase {
   function resetInactivityTimer() {
     var seconds = App.Properties.getValue("autoCloseSeconds");
     if (seconds == null || seconds == 0) {
-      // Feature disabled, stop any running timer
-      _inactivityTimer.stop();
+      // Feature disabled, drop any pending timeout
+      Scheduler.cancel(:inactivity);
       return;
     }
 
-    var timeoutMs = seconds * 1000;
-    _inactivityTimer.stop();
-    _inactivityTimer.start(method(:onInactivityTimeout), timeoutMs, false);
+    // Rescheduling the same key only moves the deadline: no new timer.
+    Scheduler.schedule(:inactivity, method(:onInactivityTimeout), seconds * 1000);
   }
 
   // Called when inactivity timer expires

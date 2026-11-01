@@ -1,5 +1,4 @@
 using Toybox.WatchUi as Ui;
-using Toybox.Timer;
 using Toybox.System;
 
 
@@ -20,8 +19,10 @@ class Error {
         if (errorCode == Error.ERROR_PHONE_NOT_CONNECTED) {
             code = Error.ERROR_PHONE_NOT_CONNECTED;
             message = Rez.Strings.Error_PhoneNotConnected;
-            var exitTimer = new Timer.Timer();
-            exitTimer.start(method(:exitApplication), 2500, false);  // Changed to false to prevent repeated exit calls
+            // One keyed job however many of these are built - every request
+            // that fails this way builds one, and each used to start a Timer
+            // of its own: "Too Many Timers Error" once three ran (issue #101).
+            Scheduler.schedule(:exit, method(:exitApplication), 2500);
             return;
         }
 

@@ -1,7 +1,6 @@
 using Toybox.Application as App;
 using Toybox.WatchUi as Ui;
 using Toybox.System;
-using Toybox.Timer;
 using Toybox.Lang;
 
 using Utils;
@@ -35,8 +34,6 @@ module Hass {
   var _transitionalEntities =  new [0];
   var _continueRefreshOnError = false;
   var _refreshActive = false;
-  var _refreshTimer = new Timer.Timer();
-  var _finalizeTimer = new Timer.Timer();
   var _pendingImportIds = null;
 
   // Free-heap floor, in bytes. Below this we stop allocating rather than let
@@ -501,7 +498,9 @@ module Hass {
 
     if(noop != null && noop.isTransitional()){
       _transitionalEntities.add(noop);
-      _refreshTimer.start(Utils.method(Hass, :_refreshTransitionalEntities), 2000, false);
+      // Every transitional entity in a chain lands here; the keyed job is
+      // simply moved instead of starting the timer once per entity (#101).
+      Scheduler.schedule(:transitional, Utils.method(Hass, :_refreshTransitionalEntities), 2000);
     }
 
     if (_entitiesToRefresh.size() > 0 && Utils.freeMemory() < MIN_FREE_MEMORY) {
@@ -540,7 +539,7 @@ module Hass {
   // parsed body is still live. By the time the timer fires, onWebResponse()
   // has returned and the response is collectable.
   function _scheduleDeferred() {
-    _finalizeTimer.start(Utils.method(Hass, :_runDeferred), 50, false);
+    Scheduler.schedule(:deferred, Utils.method(Hass, :_runDeferred), Scheduler.MIN_DELAY);
   }
 
   // One timer serves both deferred jobs. A pending import wins: it ends by
@@ -756,9 +755,10 @@ module Hass {
 
     // Check if we should exit after action
     if (App.Properties.getValue("closeAfterAction")) {
-      // Small delay before exiting to ensure UI updates are seen by user
-      var exitTimer = new Timer.Timer();
-      exitTimer.start(Utils.method(Hass, :exitApplication), 2000, false);
+      // Small delay before exiting to ensure UI updates are seen by user.
+      // This used to start a brand-new Timer for every action - one of the
+      // timers behind "Too Many Timers Error" (issue #101).
+      Scheduler.schedule(:exit, Utils.method(Hass, :exitApplication), 2000);
     }
   }
 
