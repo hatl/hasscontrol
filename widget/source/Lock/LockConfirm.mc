@@ -40,7 +40,7 @@ module LockConfirm {
   // the same sandbox.
   const STORAGE_KEY_FAILURES = "Lock/pinFailures";
 
-  const MESSAGE_LOCKED = "PIN locked\nSet a new PIN in\nthe app settings";
+  const MESSAGE_LOCKED = "PIN locked\nSet a different\nPIN in the app";
 
   // Called before `entity` (a lock) is toggled. Returns true when it took
   // over - a question, the PIN entry, the login or an error is on screen,
@@ -63,7 +63,9 @@ module LockConfirm {
 
     var viaWifiLte = WifiLte.shouldUse();
 
-    if (!System.getDeviceSettings().phoneConnected && !viaWifiLte) {
+    // Direct connection: the phone, or on Edge units Wi-Fi outside a sync
+    // (see WifiLte.hasDirectConnection()).
+    if (!WifiLte.hasDirectConnection() && !viaWifiLte) {
       // Nothing could carry the command: no point in asking for a PIN
       // first. The toggle reports "Phone not connected".
       return false;
