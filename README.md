@@ -61,7 +61,7 @@ Currently only following Home Assistant entities are supported:
  light         | Only turning on/off is supported, the rest like colour, brightness, etc. are not supported.
  button        | Push/Trigger a button
  input_button  | Push/Trigger an input button
- lock          | Both locking and unlocking are supported, optionally behind a yes/no question or a PIN - see [Lock confirmation](#lock-confirmation).
+ lock          | Both locking and unlocking are supported, optionally behind a yes/no question or a PIN (not on [low-memory devices](#low-memory-devices)) - see [Lock confirmation](#lock-confirmation).
  cover         | Both closing and opening the cover is supported.
  fan           | Turning on and off is supported. Changing speed is not.
  switch        | Only turning on/off, energy consumption and standby mode are not supported.
@@ -252,20 +252,22 @@ e.g., "my_garmin_device"
 **Confirm before locking/unlocking a lock**: What happens when you select a `lock` entity:
 
 - `Off` (default): it is locked or unlocked right away.
-- `Yes/no question`: the watch asks first, e.g. `Unlock Front Door?`.
-- `PIN`: you enter the PIN set in **Lock PIN** first.
+- `Yes/no question`: the watch asks first, e.g. `Unlock Front Door?`. When the action goes out [over Wi-Fi/LTE](#without-the-phone-waiting-wi-fi-and-lte), the `... via Wi-Fi/LTE?` question is asked instead.
+- `PIN`: you enter the PIN set in **Lock PIN** first (over Wi-Fi/LTE, the Wi-Fi/LTE question follows).
 
-**Lock PIN**: Exactly four digits. If `PIN` is selected but no valid PIN is set, locks cannot be operated from the watch at all (`Lock PIN not set`) - the widget does not fall back to no PIN.
+Nothing is asked when the action could not be sent anyway: without the phone (and without Wi-Fi/LTE) you get `Phone not connected`, and when the widget is logged out, selecting a lock starts the login - select the lock again afterwards.
+
+**Lock PIN**: Exactly four digits, masked as you type them. If `PIN` is selected but no valid PIN is set, locks cannot be operated from the watch at all (`Lock PIN not set or not 4 digits`) - the widget does not fall back to no PIN.
 
 Entering the PIN works like the passcode of the Garmin Pay wallet:
 
 - Four slots at the top fill up as you enter digits - the digits themselves are never shown - and the PIN is checked as soon as the fourth one is in.
-- On **touchscreen** watches you tap the digits on a keypad. The buttons work as well: up/down move a highlight over the keys and select presses it (for watches with the touchscreen switched off).
+- On **touchscreen** watches you tap the digits on a keypad; swipes are ignored (back still works). Watches that also have up/down buttons can use those: they move a highlight over the keys, and select presses the highlighted key (the first press brings up the highlight). On watches without up/down buttons (e.g. Venu, vívoactive, Edge 1040) just tap the keys - the select button does nothing here.
 - On **button** watches you choose each digit on a wheel with up/down and take it with select.
-- Back deletes the last digit, or leaves the screen when there is none.
-- After a wrong PIN you can try again. **Three wrong entries in a row lock it**, also across restarts of the widget, until you **set a new PIN** in the app settings - just as the wallet has to be reset in Garmin Connect. A correct entry resets the count.
+- Back deletes the last digit, or leaves the screen when there is none. Devices without a back button (e.g. eTrex Touch) show an `X` key at the bottom left of the keypad to leave.
+- After a wrong PIN you can try again. **Three wrong entries in a row lock it**, also across restarts of the widget, until you **set a different PIN** in the app settings - just as the wallet has to be reset in Garmin Connect. A correct entry resets the count, and wrong entries made against an old PIN do not count against a new one.
 
-The settings exist in the ConnectIQ app only, on purpose: a switch on the watch would let anyone holding the watch turn the PIN off.
+The settings exist in the app settings only (the ConnectIQ app on the phone, or Garmin Express), on purpose: a switch on the watch would let anyone holding the watch turn the PIN off. Both are marked `(not on low-memory watches)` there.
 
 ***Note:*** *Not available on [low-memory devices](#low-memory-devices).*
 
@@ -460,7 +462,7 @@ This is a deliberate safeguard on [low-memory devices](#low-memory-devices) — 
 Your watch is one of the [low-memory devices](#low-memory-devices). The 3-row list view and the Home Assistant `icon:` / `device_class` icons are not built for those watches, because the memory they need is memory those watches don't have. Everything else works normally.
 
 #### Error message: "PIN locked"
-The lock PIN was entered wrong three times in a row, so lock control is blocked - like the Garmin Pay wallet after three wrong passcodes. Set a new PIN under `Lock PIN` in the ConnectIQ app settings to unblock it (to keep your old PIN, change it once and then back). See [Lock confirmation](#lock-confirmation).
+The lock PIN was entered wrong three times in a row, so lock control is blocked - like the Garmin Pay wallet after three wrong passcodes. Set a different PIN under `Lock PIN` in the app settings to unblock it. To keep your old PIN: set a different one, select a lock once on the watch (or just have the widget open while the phone app saves the setting), then set the old one again. See [Lock confirmation](#lock-confirmation).
 
 #### Wi-Fi/LTE: the sync fails with "Unknown error (0)"
 Over Wi-Fi/LTE the watch makes the TLS connection to your server itself, without the phone. Response code 0 usually means the handshake failed: some Garmin watches (confirmed for the Epix Gen 2, likely the Fenix 7 Pro and Forerunner 265) only offer TLS 1.2 cipher suites without forward secrecy over Wi-Fi, and servers that require ECDHE refuse them. There is no fix in the widget - it is a limitation of the watch firmware. If you control the server's TLS settings you may be able to allow such a connection; GarminHomeAssistant's [Wi-Fi notes](https://github.com/house-of-abbey/GarminHomeAssistant/blob/main/Wi-Fi.md#limits-of-use) collect what users found.

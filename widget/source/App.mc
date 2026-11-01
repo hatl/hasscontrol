@@ -51,11 +51,23 @@ class HassControlApp extends App.AppBase {
   function onSettingsChanged() {
     Hass.loadScenesFromSettings();
     Hass.client.onSettingsChanged();
+    onLockSettingsChanged();
 
     // Restart inactivity timer with new setting value
     resetInactivityTimer();
 
     Ui.requestUpdate();
+  }
+
+  // A different lock PIN ends a PIN lockout (LockConfirm.onSettingsChanged()).
+  // :fullmem only, like the lock confirmation itself.
+  (:fullmem)
+  hidden function onLockSettingsChanged() {
+    LockConfirm.onSettingsChanged();
+  }
+
+  (:lowmem)
+  hidden function onLockSettingsChanged() {
   }
 
   function logout() {

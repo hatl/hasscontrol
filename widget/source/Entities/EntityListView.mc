@@ -120,12 +120,13 @@ class EntityListDelegate extends Ui.BehaviorDelegate {
   // Returns true when handled (caller should not also toggleEntity()).
   //
   // Split out (rather than inlined in toggleCurrentEntity() above) so the
-  // (:lowmem) variant below never references InputNumberEditView -
-  // select/input_select/input_number/number are shown read-only on 64 KB
-  // widget devices (:lowmem, see monkey.jungle and Entity.mc), so this is
-  // unreachable there, but the reference still has to not exist for the
-  // linker to actually drop InputNumberEditView.mc's classes and the two
-  // new mdi bitmaps from that build.
+  // (:lowmem) variant below never references InputNumberEditView,
+  // LockConfirm or PinEntryView - select/input_select/input_number/number
+  // are shown read-only on 64 KB widget devices (:lowmem, see monkey.jungle
+  // and Entity.mc), and locks are toggled there without a confirmation, so
+  // this is unreachable there, but the references still have to not exist
+  // for the linker to actually drop InputNumberEditView.mc's classes, the
+  // Lock/ code and the two new mdi bitmaps from that build.
   (:fullmem)
   hidden function handleExtendedEntityTypes(entity) {
     if (entity.getType() == Hass.TYPE_SELECT) {

@@ -9,34 +9,43 @@ using Utils;
 // masked slots fill up as digits go in, and the PIN is checked as soon as
 // the fourth one is in - there is no OK step.
 //
-//  * Touch screens get the wallet's keypad: tap the digits. The buttons
-//    work too - up/down move a focus ring over the keys, select presses the
-//    focused one - for watches whose touch screen is switched off.
+//  * Touch screens get the wallet's keypad: tap the digits. Swipes do
+//    nothing, back aside. Touch watches with up/down buttons can use those:
+//    they move a focus ring over the keys, and select presses the focused
+//    one (the first press only brings up the ring). Without up/down
+//    buttons (Venu, vivoactive, Edge 1040/1050) select does nothing here.
 //  * Button watches get the wallet's digit wheel: up/down roll it, select
 //    takes the digit. The wheel goes back to 0 after each digit, so it
 //    never shows one that was entered.
 //
 // Back deletes the last digit, and leaves the screen when there is none.
-// Wrong entries and the lock-out are handled by LockConfirm.
+// Devices without a back button (e.g. eTrex Touch) get a cancel key, in
+// the keypad's otherwise blank bottom-left cell. Wrong entries and the
+// lock-out are handled by LockConfirm.
 //
 // :fullmem only, see monkey.jungle.
 (:fullmem)
 class PinEntryView extends Ui.View {
   // What keyAt() and getSelectedKey() return besides a digit 0-9.
   static const KEY_DELETE = -2;
+  static const KEY_CANCEL = -3;
 
   // The keypad is 3 columns by 4 rows, cell = row * 3 + column: cells 0-8
-  // hold 1-9, and the bottom row is [blank] [0] [delete].
+  // hold 1-9, and the bottom row is [blank or cancel] [0] [delete].
   static const CELL_BLANK = 9;
   static const CELL_COUNT = 12;
 
-  hidden var _mTitle;   // e.g. "Unlock Front Door"
-  hidden var _mKeypad;  // true: keypad, false: digit wheel
-  hidden var _mCount;   // digits entered so far
-  hidden var _mWheel;   // digit on the wheel
-  hidden var _mFocus;   // keypad cell with the focus ring, -1 for none
-  hidden var _mMessage; // shown instead of "Enter PIN" after a wrong entry
-  hidden var _mDetail;  // shown instead of the title after a wrong entry
+  hidden var _mTitle;     // e.g. "Unlock Front Door"
+  hidden var _mKeypad;    // true: keypad, false: digit wheel
+  hidden var _mRing;      // keypad: up/down buttons move a focus ring
+  hidden var _mCancel;    // keypad: cancel key in the blank cell
+  hidden var _mColored;   // the "Colored icons" setting
+  hidden var _mSubscreen; // Instinct sub-window, or null - see initialize()
+  hidden var _mCount;     // digits entered so far
+  hidden var _mWheel;     // digit on the wheel
+  hidden var _mFocus;     // keypad cell with the focus ring, -1 for none
+  hidden var _mMessage;   // shown instead of "Enter PIN" after a wrong entry
+  hidden var _mDetail;    // shown instead of the title after a wrong entry
 
   // Keypad geometry of the last onUpdate(), for keyAt().
   hidden var _mGridLeft;
@@ -46,8 +55,31 @@ class PinEntryView extends Ui.View {
 
   function initialize(title) {
     View.initialize();
+
+    var settings = System.getDeviceSettings();
+    var buttons = settings.inputButtons;
+
     _mTitle = title;
-    _mKeypad = System.getDeviceSettings().isTouchScreen;
+    _mKeypad = settings.isTouchScreen;
+    // The ring needs both buttons. Without them, select presses alone would
+    // only ever bring it up on the first key - and enter "1".
+    _mRing = _mKeypad
+      && (buttons & System.BUTTON_INPUT_UP) != 0
+      && (buttons & System.BUTTON_INPUT_DOWN) != 0;
+    // Without a back button nothing else leaves the screen.
+    _mCancel = _mKeypad && (buttons & System.BUTTON_INPUT_ESC) == 0;
+    // There is no reliable way to tell a color display from a monochrome
+    // one, so the "Colored icons" setting decides here too (see README).
+    _mColored = Utils.getProperty("coloredIcons", false) == true;
+    // The round sub-window in the top-right corner of the Instinct E and
+    // Instinct 3 (a Graphics.BoundingBox; getSubscreen() is 3.2.7+ and
+    // returns null without one), which the header keeps clear of. Not on
+    // round screens: the Instinct 3 AMOLED's sub-window is a virtual one,
+    // and a header moved left of it would run off the round edge.
+    _mSubscreen = null;
+    if (Ui has :getSubscreen && settings.screenShape != System.SCREEN_SHAPE_ROUND) {
+      _mSubscreen = Ui.getSubscreen();
+    }
     _mCount = 0;
     _mWheel = 0;
     _mFocus = -1;
@@ -61,6 +93,10 @@ class PinEntryView extends Ui.View {
 
   function onLayout(dc) {
     setLayout([]);
+  }
+
+  function isKeypad() {
+    return _mKeypad;
   }
 
   function setCount(count) {
@@ -77,10 +113,14 @@ class PinEntryView extends Ui.View {
   }
 
   // Up/down: roll the wheel, or move the keypad's focus ring (which up
-  // moves back towards 1, like reading order).
+  // moves back towards 1, like reading order) - if it has one.
   function step(up) {
     if (!_mKeypad) {
       _mWheel = (_mWheel + (up ? 1 : 9)) % 10;
+      return;
+    }
+
+    if (!_mRing) {
       return;
     }
 
@@ -89,7 +129,7 @@ class PinEntryView extends Ui.View {
 
     _mFocus = _mFocus < 0 ? 0 : (_mFocus + delta) % CELL_COUNT;
 
-    if (_mFocus == CELL_BLANK) {
+    if (cellKey(_mFocus) == null) {
       _mFocus = (_mFocus + delta) % CELL_COUNT;
     }
   }
@@ -135,7 +175,7 @@ class PinEntryView extends Ui.View {
     if (cell == 11) {
       return KEY_DELETE;
     }
-    return null;
+    return _mCancel ? KEY_CANCEL : null;
   }
 
   function onUpdate(dc) {
@@ -151,16 +191,12 @@ class PinEntryView extends Ui.View {
       dc.setAntiAlias(true);
     }
 
-    // There is no reliable way to tell a color display from a monochrome
-    // one, so the "Colored icons" setting decides here too (see README).
-    var colored = Utils.getProperty("coloredIcons", false) == true;
-
-    drawHeader(dc, width, height, colored);
+    drawHeader(dc, width, height, _mColored);
 
     if (_mKeypad) {
-      drawKeypad(dc, width, height, colored);
+      drawKeypad(dc, width, height, _mColored);
     } else {
-      drawWheel(dc, width, height, colored);
+      drawWheel(dc, width, height, _mColored);
     }
   }
 
@@ -168,6 +204,16 @@ class PinEntryView extends Ui.View {
   // the next one ringed.
   hidden function drawHeader(dc, width, height, colored) {
     var center = width / 2;
+    // A round screen is narrow this close to its top edge.
+    var textWidth = width * (Utils.isRectangularScreen() ? 0.9 : 0.62);
+
+    if (_mSubscreen != null) {
+      // Centred in the part left of the sub-window, so none of it runs
+      // under the window.
+      center = _mSubscreen.x / 2;
+      textWidth = _mSubscreen.x - 8;
+    }
+
     var justify = Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER;
 
     var prompt = _mMessage != null ? _mMessage : "Enter PIN";
@@ -177,8 +223,6 @@ class PinEntryView extends Ui.View {
     );
     dc.drawText(center, height * 0.12, Graphics.FONT_SMALL, prompt, justify);
 
-    // A round screen is narrow this close to its top edge.
-    var textWidth = width * (Utils.isRectangularScreen() ? 0.9 : 0.62);
     var detail = _mDetail != null ? _mDetail : _mTitle;
     var fitted = Graphics.fitTextToArea(
       detail,
@@ -246,7 +290,11 @@ class PinEntryView extends Ui.View {
 
   hidden function drawKeypad(dc, width, height, colored) {
     var top = height * 0.36;
-    var bottom = height * (Utils.isRectangularScreen() ? 0.98 : 0.96);
+    // On a round screen the grid ends higher, so that the outer keys of the
+    // bottom row stay inside the round edge: at 0.96 the delete key's
+    // circle ran into the bezel on every round touch watch, by about 1.7 %
+    // of the width; at 0.93 every key keeps about 1.5 % clear of it.
+    var bottom = height * (Utils.isRectangularScreen() ? 0.98 : 0.93);
     var cellHeight = (bottom - top) / 4;
     var cellWidth = width * 0.24;
 
@@ -259,7 +307,7 @@ class PinEntryView extends Ui.View {
     _mCellWidth = cellWidth;
     _mCellHeight = cellHeight;
 
-    // Sized so the outer keys of the bottom row stay inside a round screen.
+    // Most of the cell, leaving a gap between neighbouring keys.
     var radius = (cellWidth < cellHeight ? cellWidth : cellHeight) * 0.42;
 
     var font = Graphics.FONT_MEDIUM;
@@ -299,6 +347,14 @@ class PinEntryView extends Ui.View {
 
       if (key == KEY_DELETE) {
         drawDeleteGlyph(dc, x, y, radius * 0.55, ink, focused ? Graphics.COLOR_WHITE : face);
+      } else if (key == KEY_CANCEL) {
+        // An "x".
+        var arm = radius * 0.35;
+        dc.setColor(ink, Graphics.COLOR_TRANSPARENT);
+        dc.setPenWidth(3);
+        dc.drawLine(x - arm, y - arm, x + arm, y + arm);
+        dc.drawLine(x - arm, y + arm, x + arm, y - arm);
+        dc.setPenWidth(1);
       } else {
         dc.setColor(ink, Graphics.COLOR_TRANSPARENT);
         dc.drawText(x, y, font, key.toString(), justify);
@@ -365,7 +421,15 @@ class PinEntryDelegate extends Ui.BehaviorDelegate {
   }
 
   function onKey(keyEvent) {
-    if (keyEvent.getKey() != Ui.KEY_ENTER) {
+    var pressed = keyEvent.getKey();
+
+    if (pressed == Ui.KEY_UP || pressed == Ui.KEY_DOWN) {
+      // The up/down buttons on the keypad, passed on by onPreviousPage()
+      // and onNextPage().
+      return step(pressed == Ui.KEY_UP);
+    }
+
+    if (pressed != Ui.KEY_ENTER) {
       return false;
     }
 
@@ -374,7 +438,8 @@ class PinEntryDelegate extends Ui.BehaviorDelegate {
     var key = _mView.getSelectedKey();
 
     if (key == null) {
-      // Keypad, no key focused yet: the first press brings up the ring.
+      // Keypad, no key focused yet: the first press brings up the ring -
+      // nothing on touch-only watches, which have none.
       _mView.step(false);
       Ui.requestUpdate();
     } else {
@@ -400,14 +465,23 @@ class PinEntryDelegate extends Ui.BehaviorDelegate {
     return true;
   }
 
-  // The up button.
-  function onPreviousPage() {
-    return step(true);
+  // Swipes neither move the focus ring nor enter digits: up, down and left
+  // are swallowed. Right is not: where it means back, it is the system's to
+  // turn into onBack().
+  function onSwipe(swipeEvent) {
+    return swipeEvent.getDirection() != Ui.SWIPE_RIGHT;
   }
 
-  // The down button.
+  // The up button. Touch screens map swipes to the page behaviours too, so
+  // on the keypad both are passed on: the button to onKey(), which moves
+  // the ring, a swipe to onSwipe(), which ignores it.
+  function onPreviousPage() {
+    return _mView.isKeypad() ? false : step(true);
+  }
+
+  // The down button, see onPreviousPage().
   function onNextPage() {
-    return step(false);
+    return _mView.isKeypad() ? false : step(false);
   }
 
   function onBack() {
@@ -448,6 +522,13 @@ class PinEntryDelegate extends Ui.BehaviorDelegate {
       return;
     }
 
+    if (key == PinEntryView.KEY_CANCEL) {
+      // Leaves, like back with no digit entered.
+      _mDone = true;
+      Ui.popView(Ui.SLIDE_IMMEDIATE);
+      return;
+    }
+
     _mEntered += key.toString();
     _mView.setCount(_mEntered.length());
     _mView.setMessage(null, null);
@@ -479,11 +560,13 @@ class PinEntryDelegate extends Ui.BehaviorDelegate {
       return;
     }
 
+    // Counted first: should anything after this fail - the vibration, say -
+    // the wrong entry has counted all the same.
+    var left = LockConfirm.recordFailure(_mPin);
+
     _mEntered = "";
     _mView.setCount(0);
     vibrate();
-
-    var left = LockConfirm.recordFailure(_mPin);
 
     if (left == 0) {
       _mDone = true;

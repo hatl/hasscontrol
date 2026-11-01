@@ -34,11 +34,12 @@
        <string id="autoCloseSeconds_title">Auto-close after inactivity (seconds, 0=off)</string>
        <string id="useListView_title">Use list view style (3-row list instead of classic card)</string>
        <string id="coloredIcons_title">Colored icons (Home Assistant state colors)</string>
-       <string id="lockConfirmation_title">Confirm before locking/unlocking a lock</string>
+       <string id="lockConfirmation_title">Confirm before locking/unlocking a lock (not on low-memory watches)</string>
        <string id="lockConfirmation_off">Off</string>
        <string id="lockConfirmation_yesNo">Yes/no question</string>
        <string id="lockConfirmation_pin">PIN</string>
-       <string id="lockPin_title">Lock PIN (4 digits)</string>
+       <string id="lockPin_title">Lock PIN (4 digits) (not on low-memory watches)</string>
+       <string id="lockPin_error">The PIN must be exactly 4 digits (0-9)</string>
        <string id="wifiLteExecution_title">Send actions over Wi-Fi/LTE when the phone is not connected (watches with the sync API only; not on low-memory watches)</string>
     </strings>
 
@@ -90,7 +91,7 @@
             </settingConfig>
         </setting>
         <setting propertyKey="@Properties.lockPin" title="@Strings.lockPin_title">
-            <settingConfig type="alphaNumeric" maxLength="4" />
+            <settingConfig type="password" maxLength="4" errorMessage="@Strings.lockPin_error" />
         </setting>
         <setting propertyKey="@Properties.wifiLteExecution" title="@Strings.wifiLteExecution_title">
             <settingConfig type="boolean" />
