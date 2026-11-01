@@ -35,18 +35,33 @@ module Hass {
     (:fullmem)
     static const STORED_FIELDS_V2 = 6;
 
+    // The longest sensor-like value writeToStorage() keeps. Home Assistant
+    // allows 255 characters; options, numbers and dates are far shorter,
+    // and a long text sensor only shows less until the next refresh.
+    (:fullmem)
+    static const MAX_STORED_VALUE = 64;
+
     // Appends this entity at `offset` and returns the next free offset.
     //
     // Slot 2 holds the state word - or, for a value shown like a sensor's
     // (STATE_SENSOR: sensor, select, input_number/number and the date/time
-    // entities), the value itself, so that it is still there after a launch
-    // without the phone (see restoreValue()). Only on :fullmem: the 64 KB
-    // tier keeps "unknown" there, as before, to spare its storage budget.
+    // entities), the value itself, up to MAX_STORED_VALUE characters, so
+    // that it is still there after a launch without the phone (see
+    // restoreValue()). Only on :fullmem: the 64 KB tier keeps "unknown"
+    // there, as before, to spare its storage budget.
     (:fullmem)
     function writeToStorage(target, offset) {
+      var state = Entity.stateToString(_mState);
+
+      if (_mState == STATE_SENSOR && _mSensorValue != null) {
+        state = _mSensorValue.length() > MAX_STORED_VALUE
+          ? _mSensorValue.substring(0, MAX_STORED_VALUE)
+          : _mSensorValue;
+      }
+
       target[offset]     = _mId;
       target[offset + 1] = _mName;
-      target[offset + 2] = _mState == STATE_SENSOR && _mSensorValue != null ? _mSensorValue : Entity.stateToString(_mState);
+      target[offset + 2] = state;
       target[offset + 3] = _mSensorClass;
       target[offset + 4] = _mIcon;
       target[offset + 5] = _mDeviceClass;
@@ -102,11 +117,13 @@ module Hass {
     // initialize() has detected that. Decided by the type rather than by
     // the word: a text sensor or an option may well read "on" or "open".
     // "unknown" and "unavailable" mean there is no value - and data stored
-    // by earlier versions holds "unknown" for all of these entities.
+    // by earlier versions holds "unknown" for all of these entities. Anything
+    // but a String (a damaged or misaligned record) is left alone: it must
+    // not stop every launch at loadStoredEntities().
     (:fullmem)
     function restoreValue(value) {
       if (
-        value != null
+        value instanceof String
         && (_mType == TYPE_SENSOR || _mType == TYPE_SELECT || _mType == TYPE_INPUT_NUMBER || _mType == TYPE_DATETIME)
         && !HASS_STATE_UNKNOWN.equals(value)
         && !"unavailable".equals(value)

@@ -424,6 +424,10 @@ class DateTimeEditDelegate extends Ui.BehaviorDelegate {
   // see onKeyReleased(): delivered with the release, it comes right after.
   static const RELEASE_WINDOW = 300;
 
+  // Repeats left at most once the menu has come up during a hold, see
+  // onMenu().
+  static const MENU_REPEATS = 10;
+
   hidden var _mEntity;
   hidden var _mView;
   // Set once confirm() or onBack() pops this view: input still queued (a
@@ -466,11 +470,22 @@ class DateTimeEditDelegate extends Ui.BehaviorDelegate {
     return isReleaseStep() ? true : step(-1);
   }
 
-  // True, once, for the page behaviour of a release that ended a repeat -
-  // see onKeyReleased(). Only right after the release: on a device that
-  // steps on the press, the flag would otherwise still be set when the
-  // next swipe comes, and swallow that.
+  // True, once, for the page behaviour a release brings along after the
+  // repeat has stepped (see onKeyReleased()) - whichever of the two the
+  // device reports first.
   hidden function isReleaseStep() {
+    // Before onKeyReleased(): the repeat still runs. It ends here, so that
+    // none of its steps slips in before the release arrives; with the
+    // count back at 0, that release then arms nothing.
+    if (_mRepeatDelta != 0 && _mRepeatCount > 0) {
+      _mRepeatCount = 0;
+      stopRepeat();
+      return true;
+    }
+
+    // After it: only right after. On a device that steps on the press, the
+    // flag would otherwise still be set when the next swipe comes, and
+    // swallow that.
     var swallow = _mSwallowStep && System.getTimer() - _mReleasedAt < RELEASE_WINDOW;
 
     _mSwallowStep = false;
@@ -633,10 +648,20 @@ class DateTimeEditDelegate extends Ui.BehaviorDelegate {
 
   // Holding up opens the menu on some watches, about a second into the
   // hold. While the repeat runs that is the same hold, so it is taken and
-  // the repeat goes on; the release (or REPEAT_MAX) still ends it. Not
-  // consumed otherwise, as in the number editor.
+  // the repeat goes on - for MENU_REPEATS more steps at most, in case the
+  // firmware never reports the release after its long-press menu. The
+  // release still ends it sooner. Not consumed otherwise, as in the number
+  // editor.
   function onMenu() {
-    return _mRepeatDelta != 0;
+    if (_mRepeatDelta == 0) {
+      return false;
+    }
+
+    if (_mRepeatCount < REPEAT_MAX - MENU_REPEATS) {
+      _mRepeatCount = REPEAT_MAX - MENU_REPEATS;
+    }
+
+    return true;
   }
 
   // The :fieldRepeat job.

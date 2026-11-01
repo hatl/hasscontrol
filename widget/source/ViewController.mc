@@ -67,25 +67,6 @@ class ViewController {
     return _loaderActive != null && !isErrorActive() && !isLoginActive();
   }
 
-  // Whether a pop meant for the loader would take off the loader. Back on a
-  // loader shown without a delegate pops it without anyone being told, so
-  // _loaderActive can outlive it - and the pop would then take off whatever
-  // is on top instead, such as an editor opened since. Where
-  // getCurrentView() tells (CIQ 3.4.0+), another view on top means the
-  // loader is gone. A null view proves nothing - Ui.ProgressBar is not a
-  // View, and how getCurrentView() reports one is not documented - so then,
-  // as below 3.4.0, the pop goes ahead as it always did.
-  hidden function isLoaderOnTop() {
-    if (Ui has :getCurrentView) {
-      var current = Ui.getCurrentView();
-
-      if (current != null && current[0] != null && current[0] != _loaderView) {
-        return false;
-      }
-    }
-    return true;
-  }
-
   // Returns true when the "useListView" setting is enabled, selecting the
   // 3-row list view instead of the classic single-card view.
   function useListEntityView() {
@@ -264,19 +245,20 @@ class ViewController {
 
   }
 
+  // Every loader gets a delegate whose back goes through dismissLoader(), so
+  // that _loaderActive never outlives it - see LoaderDelegate.
   function showLoader(text) {
-    showLoaderWithDelegate(text, null);
+    showLoaderWithDelegate(text, new LoaderDelegate());
   }
 
-  // `delegate` handles input on the loader, or null for the system default
-  // (back dismisses it). Only ConnectionWait passes one, so that leaving its
-  // long-lived loader with back keeps _loaderActive in step.
+  // `delegate` handles input on the loader: showLoader()'s LoaderDelegate,
+  // or ConnectionWait's own. Either calls dismissLoader() on back.
   function showLoaderWithDelegate(text, delegate) {
     // A delayed removal still pending belongs to the previous loader - left
     // to run it would close this one before its request has completed.
     Scheduler.cancel(:loader);
 
-    if (isShowingLoader() && isLoaderOnTop()) {
+    if (isShowingLoader()) {
       Ui.popView(Ui.SLIDE_IMMEDIATE);
     }
 
@@ -300,9 +282,7 @@ class ViewController {
         return;
       }
 
-      if (isLoaderOnTop()) {
-        Ui.popView(Ui.SLIDE_BLINK);
-      }
+      Ui.popView(Ui.SLIDE_BLINK);
     }
 
     _loaderActive = null;
@@ -311,17 +291,17 @@ class ViewController {
   function removeLoaderImmediate() {
     Scheduler.cancel(:loader);
 
-    if (isShowingLoader() && isLoaderOnTop()) {
+    if (isShowingLoader()) {
       Ui.popView(Ui.SLIDE_BLINK);
     }
 
     _loaderActive = null;
   }
 
-  // Back seen by the loader's own delegate (see showLoaderWithDelegate()):
-  // the loader is the top view then, so it is popped whatever
-  // isShowingLoader() makes of the state.
-  (:fullmem)
+  // Back seen by the loader's own delegate (LoaderDelegate, or
+  // ConnectionWait's): the loader is the top view then, so it is popped
+  // whatever isShowingLoader() makes of the state. On both tiers, as every
+  // loader has such a delegate.
   function dismissLoader() {
     Scheduler.cancel(:loader);
     _loaderActive = null;

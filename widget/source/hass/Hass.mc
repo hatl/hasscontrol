@@ -131,7 +131,17 @@ module Hass {
     }
 
     Utils.logMem("storeEntities:built n", count);
-    App.Storage.setValue(STORAGE_KEY, stored);
+
+    // Application.Storage throws for a value over 32 KB, or one the store
+    // has no room left for. Then the offline copy stays as it was - the
+    // same trade as the low-memory skip above.
+    try {
+      App.Storage.setValue(STORAGE_KEY, stored);
+    } catch (e) {
+      Utils.debugLog("storeEntities: setValue failed", null, null);
+      return;
+    }
+
     Utils.logMem("storeEntities:done", null);
   }
 
@@ -948,19 +958,26 @@ module Hass {
   }
 
   // Sets a date/time entity to `fields` ([year, month, day, hour, minute],
-  // the watch's local time - see DateTimeValue), sending the part `mode`
-  // names: what the editor showed.
+  // the watch's local time - see DateTimeValue). `mode` is what the editor
+  // showed; what is sent is what the entity holds now.
   (:fullmem)
   function setDateTimeValue(entity, fields, mode) {
     // A refresh while the editor was open can change what an
     // input_datetime holds (its state shows whether it has a date, a time
-    // or both). What was entered then no longer fits it, and sending a part
-    // it does not have would fail - as LockConfirm.execute() refuses a lock
-    // whose state changed.
-    if (DateTimeValue.modeOf(entity) != mode) {
+    // or both) - typically from "unknown", which opens with date and time,
+    // to what it really has. If that is part of what was shown, just that
+    // part is sent; sending a part the entity does not have would fail.
+    // Should it need a part the editor did not show, what was entered does
+    // not fit it, and nothing is sent - as LockConfirm.execute() refuses a
+    // lock whose state changed.
+    var current = DateTimeValue.modeOf(entity);
+
+    if ((current & mode) != current) {
       App.getApp().viewController.showError("Entity changed,\nplease retry");
       return;
     }
+
+    mode = current;
 
     var service = DateTimeValue.serviceName(entity);
     var params = DateTimeValue.serviceParams(entity, fields, mode);
