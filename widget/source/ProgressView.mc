@@ -30,11 +30,28 @@ class LoaderDelegate extends Ui.BehaviorDelegate {
   }
 
   function onBack() {
-    if (!_mGone) {
-      _mGone = true;
-      App.getApp().viewController.dismissLoader();
+    if (_mGone) {
+      return true;
     }
 
+    if (App.getApp().viewController.dismissLoader()) {
+      _mGone = true;
+      return true;
+    }
+
+    // Nothing to pop on our side (see dismissLoader()): leave the back to
+    // the system, as a loader without a delegate would.
+    return false;
+  }
+
+  // A tap or select on a showing loader has nothing to do. It must not fall
+  // through to the system either: an unhandled tap exits the app on some
+  // devices (see the note on InputNumberEditDelegate.onTap()).
+  function onTap(clickEvent) {
+    return true;
+  }
+
+  function onSelect() {
     return true;
   }
 }

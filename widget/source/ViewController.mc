@@ -302,10 +302,23 @@ class ViewController {
   // ConnectionWait's): the loader is the top view then, so it is popped
   // whatever isShowingLoader() makes of the state. On both tiers, as every
   // loader has such a delegate.
+  //
+  // Returns false without popping when _loaderActive is already null. That
+  // is a loader a removal could not pop because the login view sat on top
+  // of it (isShowingLoader() was false, so removeLoader() only cleared the
+  // flag) and that is on screen again now the login view is gone. The
+  // delegate then lets the system handle the back itself, which pops the
+  // loader - exactly what a loader without a delegate got.
   function dismissLoader() {
     Scheduler.cancel(:loader);
+
+    if (_loaderActive == null) {
+      return false;
+    }
+
     _loaderActive = null;
     Ui.popView(Ui.SLIDE_IMMEDIATE);
+    return true;
   }
 
   function showError(error) {
