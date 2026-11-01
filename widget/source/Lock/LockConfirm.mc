@@ -1,6 +1,5 @@
 using Toybox.Application as App;
 using Toybox.Lang;
-using Toybox.System;
 using Toybox.WatchUi as Ui;
 using Hass;
 
@@ -67,8 +66,11 @@ module LockConfirm {
     // (see WifiLte.hasDirectConnection()).
     if (!WifiLte.hasDirectConnection() && !viaWifiLte) {
       // Nothing could carry the command: no point in asking for a PIN
-      // first. The toggle reports "Phone not connected".
-      return false;
+      // first. Reported here rather than left to the toggle, so that no
+      // later change to the toggle's own checks can turn this into an
+      // unconfirmed send. Error() also schedules the usual app exit.
+      App.getApp().viewController.showError(new Error(Error.ERROR_PHONE_NOT_CONNECTED));
+      return true;
     }
 
     if (!App.getApp().isLoggedIn()) {
@@ -85,11 +87,10 @@ module LockConfirm {
     var verb = state == Hass.STATE_LOCKED ? "Unlock" : "Lock";
 
     if (mode == MODE_YES_NO) {
-      if (viaWifiLte) {
-        // The Wi-Fi/LTE prompt the toggle shows asks the same question.
-        return false;
-      }
-
+      // Asked even when the action will go out over Wi-Fi/LTE, whose own
+      // question then follows: leaving the lock's confirmation to the
+      // toggle's Wi-Fi/LTE check would let a change there silently turn
+      // the question off.
       var question = new Ui.Confirmation(verb + "\n" + entity.getRawName() + "?");
       Ui.pushView(question, new LockConfirmDelegate(entity, question), Ui.SLIDE_IMMEDIATE);
       return true;

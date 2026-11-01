@@ -38,6 +38,9 @@ module Scheduler {
   // of costing another MIN_DELAY round trip.
   const SLACK = 10;
 
+  // See _arm(): an armed deadline this far in the past is taken as missed.
+  const STALE_ARM = 1000;
+
   var _timer = null;
   var _onTimerMethod = null;
   var _jobs = {};       // key => [callback, due], due in System.getTimer() ms
@@ -64,6 +67,14 @@ module Scheduler {
 
   // Makes sure the timer fires no later than `due`.
   function _arm(due) {
+    // A started one-shot Timer always fires - unless something undocumented
+    // swallowed the callback. _armedDue would then stay set, every later,
+    // longer schedule() would return below, and all delayed work would
+    // stop. A deadline more than STALE_ARM ago is therefore taken as stale.
+    if (_armedDue != null && System.getTimer() - _armedDue > STALE_ARM) {
+      _armedDue = null;
+    }
+
     // System.getTimer() wraps around, so moments are compared through their
     // difference rather than directly.
     if (_armedDue != null && _armedDue - due <= 0) {

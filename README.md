@@ -252,7 +252,7 @@ e.g., "my_garmin_device"
 **Confirm before locking/unlocking a lock**: What happens when you select a `lock` entity:
 
 - `Off` (default): it is locked or unlocked right away.
-- `Yes/no question`: the watch asks first, e.g. `Unlock Front Door?`. When the action goes out [over Wi-Fi/LTE](#without-the-phone-waiting-wi-fi-and-lte), the `... via Wi-Fi/LTE?` question is asked instead.
+- `Yes/no question`: the watch asks first, e.g. `Unlock Front Door?`. When the action has to go out [over Wi-Fi/LTE](#without-the-phone-waiting-wi-fi-and-lte), its `... via Wi-Fi/LTE?` question follows.
 - `PIN`: you enter the PIN set in **Lock PIN** first (over Wi-Fi/LTE, the Wi-Fi/LTE question follows).
 
 Nothing is asked when the action could not be sent anyway: without the phone (and without Wi-Fi/LTE) you get `Phone not connected`, and when the widget is logged out, selecting a lock starts the login - select the lock again afterwards.
@@ -264,7 +264,7 @@ Entering the PIN works like the passcode of the Garmin Pay wallet:
 - Four slots at the top fill up as you enter digits - the digits themselves are never shown - and the PIN is checked as soon as the fourth one is in.
 - On **touchscreen** watches you tap the digits on a keypad; swipes are ignored (back still works). Watches that also have up/down buttons can use those: they move a highlight over the keys, and select presses the highlighted key (the first press brings up the highlight). On watches without up/down buttons (e.g. Venu, vívoactive, Edge 1040) just tap the keys - the select button does nothing here.
 - On **button** watches you choose each digit on a wheel with up/down and take it with select.
-- Back deletes the last digit, or leaves the screen when there is none. Devices without a back button (e.g. eTrex Touch) show an `X` key at the bottom left of the keypad to leave.
+- Back deletes the last digit, or leaves the screen when there is none. Devices without a back button (e.g. eTrex Touch, Edge 1040/1050) show an `X` key at the bottom left of the keypad to leave.
 - After a wrong PIN you can try again. **Three wrong entries in a row lock it**, also across restarts of the widget, until you **set a different PIN** in the app settings - just as the wallet has to be reset in Garmin Connect. A correct entry resets the count, and wrong entries made against an old PIN do not count against a new one.
 
 The settings exist in the app settings only (the ConnectIQ app on the phone, or Garmin Express), on purpose: a switch on the watch would let anyone holding the watch turn the PIN off. Both are marked `(not on low-memory watches)` there.
@@ -369,7 +369,7 @@ No loader is shown in two cases - the widget then waits quietly, and still refre
 
 Actions you take without the phone (and without Wi-Fi/LTE) still show `Phone not connected` and close the widget about 2.5 seconds later - except while the widget is still waiting for the phone after you opened it: then only the message is shown.
 
-**Edge bike computers.** Edge units with Wi-Fi keep it switched on whenever no activity is being recorded. While their Wi-Fi is connected, the widget talks to Home Assistant over it directly, just as through the phone: the states are refreshed (this also ends the wait at startup), and actions are sent right away, without a sync - the Wi-Fi/LTE setting below is not needed for that. This is based on Garmin's device data and forum; it has not been tested on an Edge.
+**Edge bike computers.** The Edge 530/540/550/830/840/850/1030/1040/1050/1060 and Edge MTB keep their Wi-Fi switched on whenever no activity is being recorded. While it is connected, the widget talks to Home Assistant over it directly, just as through the phone: the states are refreshed (this also ends the wait at startup), and actions are sent right away, without a sync - the Wi-Fi/LTE setting below does nothing on these units. This is based on Garmin's device data and forum; it has not been tested on an Edge.
 
 **Wi-Fi/LTE.** Watches with Wi-Fi or LTE can send actions without the phone, the way [GarminHomeAssistant](https://github.com/house-of-abbey/GarminHomeAssistant/blob/main/Wi-Fi.md) does it. Enable `Send actions over Wi-Fi/LTE when the phone is not connected` in the app settings. Then, while the phone is not connected, selecting an entity asks e.g. `Unlocking Front Door via Wi-Fi/LTE?`; confirm, and the watch starts a sync - the system sync screen - during which it sends the action to Home Assistant itself. With Wi-Fi/LTE available the widget still waits for the phone at startup, but without the `Waiting for connection` loader (see above).
 
@@ -382,9 +382,9 @@ Limits:
 - You have to be in range of the Wi-Fi access point configured on the watch. LTE reaches further, but your carrier may charge for it - and some LTE models do not let Connect IQ apps use LTE at all, e.g. the Fenix 8 Pro and Fenix 9 Pro (GarminHomeAssistant issues [#292](https://github.com/house-of-abbey/GarminHomeAssistant/issues/292) and [#385](https://github.com/house-of-abbey/GarminHomeAssistant/issues/385)).
 - **Only on watches with the sync API.** The setting does nothing on models whose Connect IQ lacks it, e.g. the Forerunner 255/255S, Venu Sq 2, Instinct 3, Instinct E, Instinct Crossover AMOLED, Edge Explore, Edge Explore 2, Edge MTB, Edge 520 Plus, Edge 820, Fenix 5X, GPSMAP 67 and Montana 7xx.
 - Below Connect IQ 4.0.4, the sync screen shows Garmin's generic sync text instead of the action.
-- On Edge units with Wi-Fi the question only comes up while their Wi-Fi is not connected, e.g. during an activity; otherwise the widget talks to Home Assistant directly (see above).
-- The [lock confirmation](#lock-confirmation) still applies. With `Yes/no question`, the Wi-Fi/LTE question is the only one asked.
-- A confirmed action that cannot be sent within one minute is dropped - as is one whose sync you cancel, or one still waiting the next time you open the widget - so an unlock can never happen unexpectedly on some later automatic sync.
+- On the Edge units listed above the question never comes up: with Wi-Fi connected the widget talks to Home Assistant directly, and during an activity the Edge switches Wi-Fi off, so a sync could not use it either.
+- The [lock confirmation](#lock-confirmation) still applies. With `Yes/no question` you are asked twice: the lock question first, then the Wi-Fi/LTE one.
+- A confirmed action that cannot be sent within one minute is dropped - as is one whose sync you cancel (as soon as the watch tells the widget about the cancellation), or one still waiting when you next open the widget. This is a safeguard against an unlock happening unexpectedly on some later automatic sync, not a guarantee: Garmin does not document every way a sync can end.
 - If the sync ends with `Sent, reply unreadable`, the action reached Home Assistant, but the watch could not read the reply (it lists every state the action changed, which can be a lot). The action has most likely been carried out.
 
 ### Header Authentication

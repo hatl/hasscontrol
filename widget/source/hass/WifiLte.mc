@@ -18,7 +18,8 @@ using Utils;
 //
 // Edge head units differ: their Wi-Fi is up outside a sync too, whenever no
 // activity is recording. Requests then simply go out over it, as through
-// the phone, and none of this is needed - see hasDirectConnection().
+// the phone, and none of this is needed - see hasDirectConnection() and the
+// :directwifi build annotation in monkey.jungle that selects those units.
 //
 // startSync2()/startSync() are documented to exit the app and relaunch it
 // in sync mode. In practice the app can stay alive under the system sync
@@ -65,6 +66,14 @@ module WifiLte {
   // sync as failed; GarminHomeAssistant settled on this delay.
   const EXIT_DELAY = 5000; // ms
 
+  // How often launchSync() waits another MIN_DELAY for the Confirmation to
+  // be gone before starting the sync anyway.
+  const LAUNCH_TRIES = 10;
+
+  // The "... via Wi-Fi/LTE?" question on screen, see launchSync().
+  var _confirmation = null;
+  var _launchTries = 0;
+
   var _syncActive = false;
   var _syncPending = false;
 
@@ -77,17 +86,25 @@ module WifiLte {
   }
 
   // True when a request can go out right away, without a sync: the phone is
-  // connected - or Wi-Fi is. On watches Wi-Fi only reads as connected during
-  // a sync. Edge head units keep it up whenever no activity is recording:
-  // their device models list `wifiExclusions: ['fitRecording']`, Garmin
-  // staff say so on the forum, and makeWebRequest() "can be used when
-  // connected to WiFi". Verified only that far - not on an Edge.
+  // connected - or, on the units built with :directwifi (monkey.jungle),
+  // Wi-Fi is. Those are the Edge head units, which keep Wi-Fi up whenever
+  // no activity is recording: their device models list `wifiExclusions:
+  // ['fitRecording']`, Garmin staff say so on the forum, and
+  // makeWebRequest() "can be used when connected to WiFi". Verified only
+  // that far - not on an Edge.
+  //
+  // On watches Wi-Fi reads as connected during a system sync, and for a
+  // moment after one. Counting that would end the launch wait and start the
+  // refresh over a link that is about to drop - and the first failure would
+  // then close the app ("Phone not connected"). So there only the phone
+  // counts.
   function hasDirectConnection() {
     return hasDirectConnectionIn(System.getDeviceSettings());
   }
 
   // hasDirectConnection() for a System.DeviceSettings already at hand:
   // every getDeviceSettings() call builds a new one.
+  (:directwifi)
   function hasDirectConnectionIn(settings) {
     if (settings.phoneConnected) {
       return true;
@@ -102,6 +119,25 @@ module WifiLte {
     return wifi != null && wifi.state == System.CONNECTION_STATE_CONNECTED;
   }
 
+  (:nodirectwifi)
+  function hasDirectConnectionIn(settings) {
+    return settings.phoneConnected;
+  }
+
+  // Whether this unit's Wi-Fi is usable outside a sync at all (see
+  // hasDirectConnection()). Where it is, a sync never helps: the Edge
+  // switches Wi-Fi off exactly while an activity records, so a sync could
+  // not use it either - and none of these units has LTE.
+  (:directwifi)
+  function hasStandingWifi() {
+    return true;
+  }
+
+  (:nodirectwifi)
+  function hasStandingWifi() {
+    return false;
+  }
+
   // True when an action has to go out over Wi-Fi/LTE: there is no direct
   // connection (then that is used instead), the user allowed it, and the
   // watch has a radio for it.
@@ -109,6 +145,12 @@ module WifiLte {
     var settings = System.getDeviceSettings();
 
     if (!isEnabled() || hasDirectConnectionIn(settings)) {
+      return false;
+    }
+
+    if (hasStandingWifi()) {
+      // An Edge: either its Wi-Fi is up and used directly, or it is off for
+      // the activity - and a sync could not switch it on.
       return false;
     }
 
@@ -176,11 +218,9 @@ module WifiLte {
   function offer(command, text) {
     command["msg"] = text;
 
-    Ui.pushView(
-      new Ui.Confirmation(text + "\nvia Wi-Fi/LTE?"),
-      new WifiLteConfirmDelegate(command),
-      Ui.SLIDE_IMMEDIATE
-    );
+    _confirmation = new Ui.Confirmation(text + "\nvia Wi-Fi/LTE?");
+
+    Ui.pushView(_confirmation, new WifiLteConfirmDelegate(command), Ui.SLIDE_IMMEDIATE);
   }
 
   // offer() for the select/input_number style service calls.
@@ -213,6 +253,7 @@ module WifiLte {
     // wait - see expire().
     Scheduler.schedule(:wifiLteExpire, new Lang.Method(WifiLte, :expire), COMMAND_MAX_AGE * 1000);
 
+    _launchTries = 0;
     Scheduler.schedule(:wifiLteStart, new Lang.Method(WifiLte, :launchSync), Scheduler.MIN_DELAY);
   }
 
@@ -223,6 +264,23 @@ module WifiLte {
     if (command == null) {
       return;
     }
+
+    // The system pops the Confirmation only after onResponse() returned, and
+    // the sync screen is to come up over the app's own view, not over the
+    // question. Where the current view can be read (CIQ 3.4.0+), wait until
+    // the Confirmation is gone - as LockConfirmDelegate does - but not for
+    // ever: on firmware that keeps it up longer, go ahead anyway.
+    if (_confirmation != null && (Ui has :getCurrentView) && _launchTries < LAUNCH_TRIES) {
+      var current = Ui.getCurrentView();
+
+      if (current != null && current[0] == _confirmation) {
+        _launchTries++;
+        Scheduler.schedule(:wifiLteStart, new Lang.Method(WifiLte, :launchSync), Scheduler.MIN_DELAY);
+        return;
+      }
+    }
+
+    _confirmation = null;
 
     if (Communications has :startSync2) {
       Communications.startSync2({ :message => command["msg"] });
@@ -313,7 +371,7 @@ module WifiLte {
   function prepare() {
     var app = App.getApp();
 
-    _headless = app.viewController == null;
+    noteHeadless();
 
     if (_headless) {
       // OAuthClient reports every token response to it (showLoginView()).
@@ -383,6 +441,25 @@ module WifiLte {
     return error.toString();
   }
 
+  // Whether this process was started in sync mode just for the sync (then
+  // getInitialView() never ran and there is no UI). Noted at every entry
+  // from the system, not only in prepare(): the paths that end a sync
+  // before prepare() runs ("Nothing to send", a cancel) read it too.
+  function noteHeadless() {
+    _headless = App.getApp().viewController == null;
+  }
+
+  // Called when a sync starts. Should a sync-mode relaunch have run
+  // getInitialView() after all (undocumented), that armed the inactivity
+  // auto-close in this very process; in an app that stayed alive a timed
+  // exit may still be pending. Neither may end the app halfway through.
+  function quiesce() {
+    Scheduler.cancel(:inactivity);
+    Scheduler.cancel(:exitPhoneLost);
+    Scheduler.cancel(:exitAfterAction);
+    Scheduler.cancel(:exitAfterSync);
+  }
+
   // After notifySyncComplete(). `success`: the action was carried out.
   // `exitAfter`: the command was a toggle, which "Close App after successful
   // action" applies to - as via the phone, where it does not apply to select
@@ -421,11 +498,10 @@ class WifiLteConfirmDelegate extends Ui.ConfirmationDelegate {
 
     if (response == Ui.CONFIRM_YES) {
       // The command is stored right away, but start() leaves startSync2()
-      // to the Scheduler, as LockConfirmDelegate does with its toggle: the
-      // system pops this Confirmation only after onResponse() returns, and
-      // the sync screen is to come up over the app's own view.
-      // GarminHomeAssistant calls startSync2() right from here, which works
-      // on a Venu 2; how a widget fares either way on CIQ 3.x is untested.
+      // to the Scheduler, which waits until this Confirmation is off the
+      // screen (see WifiLte.launchSync()), as LockConfirmDelegate does with
+      // its toggle. GarminHomeAssistant calls startSync2() right from here,
+      // which works on a Venu 2; how a widget fares on CIQ 3.x is untested.
       WifiLte.start(_mCommand);
     }
 
@@ -452,12 +528,17 @@ class HassSyncDelegate extends Communications.SyncDelegate {
   }
 
   function onStartSync() {
+    WifiLte.noteHeadless();
+    WifiLte.quiesce();
+
     if (_mDone) {
       // This delegate's sync is over already (onStopSync() came first), so
       // nothing may go out any more. getSyncDelegate() hands out a new
       // delegate whenever it is asked; should the system reuse one for a
-      // further sync, that sync sends nothing - the safe way to fail.
+      // further sync, that sync sends nothing - the safe way to fail - and
+      // is ended right away so that its screen does not wait.
       WifiLte.clearPendingCommand();
+      Communications.notifySyncComplete(null);
       return;
     }
 
@@ -541,6 +622,7 @@ class HassSyncDelegate extends Communications.SyncDelegate {
     // Whatever else happens: the command must not be left for the next sync
     // to send unasked.
     WifiLte.clearPendingCommand();
+    WifiLte.noteHeadless();
 
     if (_mDone) {
       return;

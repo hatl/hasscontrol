@@ -20,25 +20,50 @@ project.typecheck = 0
 #   * plain http to a loopback host (Client.isLoopbackHttpUrl())
 #
 # Verify with:  monkeyc ... -d instinct2x --build-stats 1 -r -O2
-base.excludeAnnotations = lowmem
+# ── Direct Wi-Fi ─────────────────────────────────────────────────────────────
+# Edge head units keep Wi-Fi up outside a system sync whenever no activity is
+# recording (their device models list wifiExclusions: ['fitRecording']), so a
+# request can go out over it directly. Watches only have Wi-Fi up during a
+# sync - and for a moment after one - so a "connected" Wi-Fi must not count as
+# a connection there: it would end the launch wait and start requests over a
+# link that drops when the sync ends. See hass/WifiLte.mc.
+#   :directwifi   — compiled ONLY on the Edge units listed below
+#   :nodirectwifi — compiled everywhere else
+# Both are always paired with :fullmem. A new Edge model has to be added here;
+# until then it gets the safe watch behaviour.
+base.excludeAnnotations = lowmem;directwifi
 
-descentg1.excludeAnnotations = fullmem
-enduro.excludeAnnotations = fullmem
-fenix5.excludeAnnotations = fullmem
-fenix5s.excludeAnnotations = fullmem
-fenix6.excludeAnnotations = fullmem
-fenix6s.excludeAnnotations = fullmem
-fenixchronos.excludeAnnotations = fullmem
-fr245.excludeAnnotations = fullmem
-fr55.excludeAnnotations = fullmem
-fr645.excludeAnnotations = fullmem
-fr935.excludeAnnotations = fullmem
-instinct2.excludeAnnotations = fullmem
-instinct2s.excludeAnnotations = fullmem
-instinct2x.excludeAnnotations = fullmem
-instinctcrossover.excludeAnnotations = fullmem
-venusq.excludeAnnotations = fullmem
-vivoactive3.excludeAnnotations = fullmem
+edge1030.excludeAnnotations = lowmem;nodirectwifi
+edge1030bontrager.excludeAnnotations = lowmem;nodirectwifi
+edge1030plus.excludeAnnotations = lowmem;nodirectwifi
+edge1040.excludeAnnotations = lowmem;nodirectwifi
+edge1050.excludeAnnotations = lowmem;nodirectwifi
+edge1060.excludeAnnotations = lowmem;nodirectwifi
+edge530.excludeAnnotations = lowmem;nodirectwifi
+edge540.excludeAnnotations = lowmem;nodirectwifi
+edge550.excludeAnnotations = lowmem;nodirectwifi
+edge830.excludeAnnotations = lowmem;nodirectwifi
+edge840.excludeAnnotations = lowmem;nodirectwifi
+edge850.excludeAnnotations = lowmem;nodirectwifi
+edgemtb.excludeAnnotations = lowmem;nodirectwifi
+
+descentg1.excludeAnnotations = fullmem;directwifi
+enduro.excludeAnnotations = fullmem;directwifi
+fenix5.excludeAnnotations = fullmem;directwifi
+fenix5s.excludeAnnotations = fullmem;directwifi
+fenix6.excludeAnnotations = fullmem;directwifi
+fenix6s.excludeAnnotations = fullmem;directwifi
+fenixchronos.excludeAnnotations = fullmem;directwifi
+fr245.excludeAnnotations = fullmem;directwifi
+fr55.excludeAnnotations = fullmem;directwifi
+fr645.excludeAnnotations = fullmem;directwifi
+fr935.excludeAnnotations = fullmem;directwifi
+instinct2.excludeAnnotations = fullmem;directwifi
+instinct2s.excludeAnnotations = fullmem;directwifi
+instinct2x.excludeAnnotations = fullmem;directwifi
+instinctcrossover.excludeAnnotations = fullmem;directwifi
+venusq.excludeAnnotations = fullmem;directwifi
+vivoactive3.excludeAnnotations = fullmem;directwifi
 
 # ── Launcher icon variants ───────────────────────────────────────────────────
 # The launcher icon (resources/drawables) is round: the Venu / vivoactive glance
