@@ -139,21 +139,7 @@ class HassControlApp extends App.AppBase {
     Hass.loadScenesFromSettings();
     Utils.logMem("init:5 scenes n", Hass.getEntities().size());
 
-    if (isLoggedIn()) {
-      if (Hass.getEntities().size() == 0 && Hass.getGroup() != null) {
-        // Nothing stored (fresh install, or a storage format change dropped
-        // the cache): a state refresh walks an empty list and completes
-        // instantly without a single request, so import the group instead.
-        // importEntities() ends by starting the same refresh, so this also
-        // covers the state fill the call below would have done. No view
-        // has been pushed yet at this point in getInitialView(), so the
-        // loader must stay off - see importEntities()'s comment.
-        Hass.importEntities(false);
-      } else {
-        Hass.refreshAllEntities(true);
-      }
-      Utils.logMem("init:6 refreshStarted", null);
-    }
+    startStartupWork();
 
     var deviceSettings = System.getDeviceSettings();
     var view = null;
@@ -186,11 +172,6 @@ class HassControlApp extends App.AppBase {
       delegate = new BaseDelegate();
     }
 
-    var battery_entity_id = App.Properties.getValue("report_battery_id");
-    if (battery_entity_id != null && battery_entity_id.length() > 0) {
-      Hass.reportBatteryValue(battery_entity_id);
-    }
-
     // Start inactivity timer if configured
     resetInactivityTimer();
 
@@ -200,6 +181,69 @@ class HassControlApp extends App.AppBase {
       view,
       delegate
     ];
+  }
+
+  // The requests every launch starts with: the state refresh (or the group
+  // import) and the battery report. Called from getInitialView() - or, on
+  // :fullmem, by ConnectionWait once the phone is connected.
+  function runStartupWork() {
+    if (isLoggedIn()) {
+      if (Hass.getEntities().size() == 0 && Hass.getGroup() != null) {
+        // Nothing stored (fresh install, or a storage format change dropped
+        // the cache): a state refresh walks an empty list and completes
+        // instantly without a single request, so import the group instead.
+        // importEntities() ends by starting the same refresh, so this also
+        // covers the state fill the call below would have done. When this
+        // runs from getInitialView() no view has been pushed yet, so the
+        // loader must stay off - see importEntities()'s comment.
+        Hass.importEntities(false);
+      } else {
+        Hass.refreshAllEntities(true);
+      }
+      Utils.logMem("init:6 refreshStarted", null);
+    }
+
+    var battery_entity_id = App.Properties.getValue("report_battery_id");
+    if (battery_entity_id != null && battery_entity_id.length() > 0) {
+      Hass.reportBatteryValue(battery_entity_id);
+    }
+  }
+
+  // Without the phone every startup request fails, and the "Phone not
+  // connected" error closes the app 2.5 s later. Instead, show a loader and
+  // start once the phone is there (see ConnectionWait).
+  (:fullmem)
+  hidden function startStartupWork() {
+    var batteryId = App.Properties.getValue("report_battery_id");
+
+    if (!isLoggedIn() && (batteryId == null || batteryId.length() == 0)) {
+      // Nothing to send, nothing to wait for.
+      return;
+    }
+
+    if (System.getDeviceSettings().phoneConnected) {
+      runStartupWork();
+      return;
+    }
+
+    new ConnectionWait().start();
+  }
+
+  (:lowmem)
+  hidden function startStartupWork() {
+    runStartupWork();
+  }
+
+  // Wi-Fi/LTE execution (see WifiLte.mc). The system asks for this before
+  // every sync - the automatic ones too, e.g. while charging - and
+  // HassSyncDelegate.isSyncNeeded() declines those unless a command is
+  // pending.
+  (:fullmem)
+  function getSyncDelegate() {
+    if (!WifiLte.isEnabled()) {
+      return null;
+    }
+    return new HassSyncDelegate();
   }
 
   // Reset the inactivity timer - call this on any user interaction

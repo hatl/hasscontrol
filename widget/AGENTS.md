@@ -13,6 +13,9 @@ The widget supports various Home Assistant entity types and handles both OAuth a
 - `hass/OAuthClient.mc`: Handles OAuth authentication flow
 - `hass/OauthCredentials.mc`: Manages storage and retrieval of authentication tokens
 - `Scheduler.mc`: The app's only `Timer.Timer`; every delayed callback is a keyed job on it (see Performance Considerations)
+- `ConnectionWait.mc` (fullmem): At launch without the phone, shows "Waiting for phone" and runs the startup requests once it connects
+- `hass/WifiLte.mc` (fullmem): Wi-Fi/LTE execution - stores an action, starts a system sync, and `HassSyncDelegate` sends it from inside the sync
+- `Lock/LockConfirm.mc`, `Lock/PinEntryView.mc` (fullmem): The optional yes/no question or wallet-style PIN before a lock is toggled
 
 # Code Style Guidelines
 
@@ -43,7 +46,7 @@ HassControl supports the following entity types:
 - `TYPE_LIGHT`: Lights (on/off only)
 - `TYPE_SWITCH`: Switches (on/off only)
 - `TYPE_COVER`: Cover entities (open/close)
-- `TYPE_LOCK`: Lock entities (lock/unlock)
+- `TYPE_LOCK`: Lock entities (lock/unlock). Fullmem devices can put a yes/no question or a PIN in front of the toggle (`lockConfirmation` setting, `LockConfirm.request()` from `EntityListDelegate.handleExtendedEntityTypes()`).
 - `TYPE_FAN`: Fan entities (on/off only)
 - `TYPE_SCENE`: Scene activation
 - `TYPE_SCRIPT`: Script activation
@@ -84,6 +87,7 @@ When adding a new entity type:
 - Cache entities and other data whenever possible using `App.Storage`
 - Use timers judiciously to avoid excessive battery drain
 - Never create a `Timer.Timer`: schedule a keyed job with `Scheduler.schedule(:key, method, ms)` and drop it with `Scheduler.cancel(:key)`. Connect IQ allows only a few running timers (3 by default) and throws "Too Many Timers Error" past that (issue #101); rescheduling a key moves its deadline instead of adding a timer
+- A Wi-Fi/LTE sync (`startSync2()`) may restart the app in sync mode, where `getInitialView()` never ran: code reachable from `HassSyncDelegate` must not assume views, `viewController` or a loaded entity list (see `WifiLte.prepare()`)
 - Set appropriate refresh intervals for transitional states
 - Clean up resources (especially timers) when views are hidden or app is closed
 - Prefer batch operations over multiple individual API calls

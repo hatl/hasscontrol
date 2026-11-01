@@ -13,6 +13,11 @@ project.typecheck = 0
 # What the lean build drops (see Utils.mc / ViewController.mc / MenuController.mc):
 #   * the mdi:* and device_class icon lookup tables  (~9.8 KB)
 #   * EntityListView, leaving the classic EntityCardView (~4.1 KB)
+#   * select/input_number editing (Menu2 picker, InputNumberEditView)
+#   * the lock confirmation and PIN entry (Lock/)
+#   * Wi-Fi/LTE execution (hass/WifiLte.mc) and the wait for the phone at
+#     launch (ConnectionWait.mc)
+#   * plain http to a loopback host (Client.isLoopbackHttpUrl())
 #
 # Verify with:  monkeyc ... -d instinct2x --build-stats 1 -r -O2
 base.excludeAnnotations = lowmem

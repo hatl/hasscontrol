@@ -49,14 +49,50 @@ module Hass {
                 chars = chars.slice(0, chars.size() - 1);
             }
 
-            // verify that host is starting with "https://"
-            if (StringUtil.charArrayToString(chars.slice(0, 8)).equals("https://")) {
-                _baseUrlIsValid = true;
-            } else {
-                _baseUrlIsValid = false;
+            _baseUrl = StringUtil.charArrayToString(chars);
+
+            // verify that host is starting with "https://" - or is plain
+            // http to the phone itself (:fullmem, see isLoopbackHttpUrl())
+            _baseUrlIsValid = _baseUrl.find("https://") == 0 || isLoopbackHttpUrl(_baseUrl);
+        }
+
+        // Plain http is accepted for the loopback host only:
+        // "http://localhost", "http://127.0.0.1" or "http://[::1]", each
+        // optionally followed by a port, path, query or fragment. Requests
+        // travel through the phone, so loopback means a server on the phone
+        // itself - e.g. a local proxy app forwarding to Home Assistant on
+        // the LAN - and the traffic never leaves it unencrypted.
+        //
+        // The host has to end right there: "http://localhost.example.com"
+        // is a different host on the internet and stays rejected.
+        (:fullmem)
+        hidden function isLoopbackHttpUrl(url) {
+            var hosts = ["http://localhost", "http://127.0.0.1", "http://[::1]"];
+
+            for (var i = 0; i < hosts.size(); i++) {
+                if (url.find(hosts[i]) == 0) {
+                    if (url.length() == hosts[i].length()) {
+                        return true;
+                    }
+
+                    var next = url.substring(hosts[i].length(), hosts[i].length() + 1);
+                    return next.equals(":") || next.equals("/") || next.equals("?") || next.equals("#");
+                }
             }
 
-            _baseUrl = StringUtil.charArrayToString(chars);
+            return false;
+        }
+
+        (:lowmem)
+        hidden function isLoopbackHttpUrl(url) {
+            return false;
+        }
+
+        // Wi-Fi/LTE execution needs https: over Wi-Fi the watch connects to
+        // Home Assistant itself, so a loopback host would be the watch.
+        (:fullmem)
+        function isHttpsUrl() {
+            return _baseUrlIsValid && _baseUrl.find("https://") == 0;
         }
 
         function onSettingsChanged() {
@@ -68,10 +104,23 @@ module Hass {
             setTokenUrl(_baseUrl + TOKEN_ENDPOINT);
         }
 
+        // Whether a request can go out at all. They are relayed by the phone -
+        // except from inside a Wi-Fi/LTE sync, where the watch sends them
+        // itself (:fullmem, see WifiLte.mc).
+        (:fullmem)
+        hidden function hasConnection() {
+            return WifiLte.isSyncActive() || System.getDeviceSettings().phoneConnected;
+        }
+
+        (:lowmem)
+        hidden function hasConnection() {
+            return System.getDeviceSettings().phoneConnected;
+        }
+
         function validateSettings(errorCallback) {
             var error = null;
 
-            if (!System.getDeviceSettings().phoneConnected) {
+            if (!hasConnection()) {
                 error = new Error(OAuthError.ERROR_PHONE_NOT_CONNECTED);
             }
 

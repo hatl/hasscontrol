@@ -81,8 +81,11 @@ class InputNumberEditDelegate extends Ui.BehaviorDelegate {
       return true;
     }
     _mDismissed = true;
-    Hass.setInputNumberValue(_mEntity, _mView.getStagedValue());
+    // Pop first: setInputNumberValue() pushes a view of its own (the loader,
+    // or the Wi-Fi/LTE prompt), which a later popView() would take off
+    // again instead of this one.
     Ui.popView(Ui.SLIDE_IMMEDIATE);
+    Hass.setInputNumberValue(_mEntity, _mView.getStagedValue());
     return true;
   }
 

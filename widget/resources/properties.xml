@@ -13,6 +13,11 @@
         <property id="autoCloseSeconds" type="number">0</property>
         <property id="useListView" type="boolean">false</property>
         <property id="coloredIcons" type="boolean">false</property>
+        <!-- The three below only apply to high-memory devices (see README, "Low-memory devices"). -->
+        <!-- 0 = off, 1 = yes/no question, 2 = PIN (LockConfirm.MODE_*) -->
+        <property id="lockConfirmation" type="number">0</property>
+        <property id="lockPin" type="string"></property>
+        <property id="wifiLteExecution" type="boolean">false</property>
     </properties>
 
     <strings>
@@ -29,6 +34,12 @@
        <string id="autoCloseSeconds_title">Auto-close after inactivity (seconds, 0=off)</string>
        <string id="useListView_title">Use list view style (3-row list instead of classic card)</string>
        <string id="coloredIcons_title">Colored icons (Home Assistant state colors)</string>
+       <string id="lockConfirmation_title">Confirm before locking/unlocking a lock</string>
+       <string id="lockConfirmation_off">Off</string>
+       <string id="lockConfirmation_yesNo">Yes/no question</string>
+       <string id="lockConfirmation_pin">PIN</string>
+       <string id="lockPin_title">Lock PIN (4 digits)</string>
+       <string id="wifiLteExecution_title">Send actions over Wi-Fi/LTE when the phone is not connected</string>
     </strings>
 
     <settings>
@@ -69,6 +80,19 @@
             <settingConfig type="boolean" />
         </setting>
         <setting propertyKey="@Properties.coloredIcons" title="@Strings.coloredIcons_title">
+            <settingConfig type="boolean" />
+        </setting>
+        <setting propertyKey="@Properties.lockConfirmation" title="@Strings.lockConfirmation_title">
+            <settingConfig type="list">
+                <listEntry value="0">@Strings.lockConfirmation_off</listEntry>
+                <listEntry value="1">@Strings.lockConfirmation_yesNo</listEntry>
+                <listEntry value="2">@Strings.lockConfirmation_pin</listEntry>
+            </settingConfig>
+        </setting>
+        <setting propertyKey="@Properties.lockPin" title="@Strings.lockPin_title">
+            <settingConfig type="alphaNumeric" maxLength="4" />
+        </setting>
+        <setting propertyKey="@Properties.wifiLteExecution" title="@Strings.wifiLteExecution_title">
             <settingConfig type="boolean" />
         </setting>
     </settings>

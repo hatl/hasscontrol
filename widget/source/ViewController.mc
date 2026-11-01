@@ -244,6 +244,13 @@ class ViewController {
   }
 
   function showLoader(text) {
+    showLoaderWithDelegate(text, null);
+  }
+
+  // `delegate` handles input on the loader, or null for the system default
+  // (back dismisses it). Only ConnectionWait passes one, so that leaving its
+  // long-lived loader with back keeps _loaderActive in step.
+  function showLoaderWithDelegate(text, delegate) {
     // A delayed removal still pending belongs to the previous loader - left
     // to run it would close this one before its request has completed.
     Scheduler.cancel(:loader);
@@ -254,7 +261,7 @@ class ViewController {
 
     loaderView().setDisplayString(text);
 
-    Ui.pushView(_loaderView, null, Ui.SLIDE_BLINK);
+    Ui.pushView(_loaderView, delegate, Ui.SLIDE_BLINK);
 
     _loaderActive = Time.now();
 
@@ -286,6 +293,16 @@ class ViewController {
     }
 
     _loaderActive = null;
+  }
+
+  // Back seen by the loader's own delegate (see showLoaderWithDelegate()):
+  // the loader is the top view then, so it is popped whatever
+  // isShowingLoader() makes of the state.
+  (:fullmem)
+  function dismissLoader() {
+    Scheduler.cancel(:loader);
+    _loaderActive = null;
+    Ui.popView(Ui.SLIDE_IMMEDIATE);
   }
 
   function showError(error) {

@@ -24,9 +24,11 @@ Please read through the instructions below, I will try to guide you through the 
     - [Display](#display)
     - [Battery and Performance](#battery-and-performance)
     - [Authentication Options](#authentication-options)
+    - [Lock confirmation](#lock-confirmation)
   - [Logging in](#logging-in)
   - [Group sync](#group-sync)
   - [Navigation \& Controls](#navigation--controls)
+  - [Without the phone: waiting, Wi-Fi and LTE](#without-the-phone-waiting-wi-fi-and-lte)
   - [Header Authentication](#header-authentication)
   - [FAQ](#faq)
     - [Unknown error -300 - Self-Signed SSL Certificate](#unknown-error--300---self-signed-ssl-certificate)
@@ -36,14 +38,17 @@ Please read through the instructions below, I will try to guide you through the 
     - [Error message: "Group too large for this watch"](#error-message-group-too-large-for-this-watch)
     - [Error message: "Low memory: only N of M entities loaded"](#error-message-low-memory-only-n-of-m-entities-loaded)
     - [My watch has no "List View" option, or ignores custom icons](#my-watch-has-no-list-view-option-or-ignores-custom-icons)
+    - [Error message: "PIN locked"](#error-message-pin-locked)
+    - [Wi-Fi/LTE: the sync fails with "Unknown error (0)"](#wi-filte-the-sync-fails-with-unknown-error-0)
 
 
 ### Prerequisites
 In order to use this widget you need to have an Home Assistant instance accessible over https using an official SSL certificate (no self-signed).
+On watches other than the [low-memory devices](#low-memory-devices), plain `http://` is accepted for one exception: a server on the phone itself (`http://localhost`, `http://127.0.0.1` or `http://[::1]`), e.g. a local proxy app that forwards to Home Assistant - see [Host](#basic-settings).
 
 As all communication from Garmin watches go thru the mobile device, you also need to have a paired mobile phone, and the Garmin Connect app needs to be running on that phone.
 
-As soon as you get out of range from the phone or closes the app the widget will stop functioning.
+As soon as you get out of range from the phone or closes the app the widget will stop functioning - unless your watch has Wi-Fi or LTE and you enable sending actions over it, see [Without the phone](#without-the-phone-waiting-wi-fi-and-lte).
 
 
 ### Supported entity types
@@ -56,7 +61,7 @@ Currently only following Home Assistant entities are supported:
  light         | Only turning on/off is supported, the rest like colour, brightness, etc. are not supported.
  button        | Push/Trigger a button
  input_button  | Push/Trigger an input button
- lock          | Both locking and unlocking are supported.
+ lock          | Both locking and unlocking are supported, optionally behind a yes/no question or a PIN - see [Lock confirmation](#lock-confirmation).
  cover         | Both closing and opening the cover is supported.
  fan           | Turning on and off is supported. Changing speed is not.
  switch        | Only turning on/off, energy consumption and standby mode are not supported.
@@ -126,6 +131,12 @@ header authentication — works exactly as documented, though `select`/`input_se
   display the entity's current option/value, the same way a plain sensor is displayed, but
   there's no menu or edit screen to change it - do that from Home Assistant or another
   device instead. See [Navigation & Controls](#navigation--controls).
+- **No [lock confirmation](#lock-confirmation).** Locks are locked and unlocked right away;
+  the `Confirm before locking/unlocking a lock` and `Lock PIN` settings have no effect.
+- **No [waiting for the phone, Wi-Fi or LTE](#without-the-phone-waiting-wi-fi-and-lte).**
+  Without the phone the widget shows `Phone not connected` and closes, as before; the
+  `Send actions over Wi-Fi/LTE` setting has no effect.
+- **https only.** The `http://localhost` exception for a proxy on the phone is not available.
 
 **Safeguards.** Even with the reduced feature set, a large Home Assistant group can exceed
 what these watches can hold. Rather than crashing, HassControl now stops and tells you:
@@ -153,6 +164,8 @@ Open the widget settings in the ConnectIQ app.
 #### Basic Settings
 
 **Host**: This should be the url to the Home Assistant instance you would like to control. Remember only https url is supported by Garmin.
+
+The one exception (not on [low-memory devices](#low-memory-devices)): plain http to the phone itself - `http://localhost`, `http://127.0.0.1` or `http://[::1]`, optionally with a port and path, e.g. `http://localhost:8123`. As every request goes through the phone, this reaches a server running on the phone, such as a local proxy app forwarding to Home Assistant on your network. Only the host itself counts: `http://localhost.example.com` is a different host and is still rejected. Such a host cannot be used [over Wi-Fi/LTE](#without-the-phone-waiting-wi-fi-and-lte), where the watch connects by itself.
 
 **Long-Lived access token**: If you prefer generating an access token in Home Assistant instead of login in thru the garmin app you can paste your token here.
 
@@ -232,6 +245,28 @@ e.g., "my_garmin_device"
 #### Authentication Options
 
 **Additional HTTP(S) Header - Key/Value**: These two fields allow you to specify a custom HTTP header to be added to all requests from the widget to Home Assistant. This can be used for additional authentication or for passing custom information to proxy servers. See the [Header Authentication](#header-authentication) section for more details.
+
+#### Lock confirmation
+
+**Confirm before locking/unlocking a lock**: What happens when you select a `lock` entity:
+
+- `Off` (default): it is locked or unlocked right away.
+- `Yes/no question`: the watch asks first, e.g. `Unlock Front Door?`.
+- `PIN`: you enter the PIN set in **Lock PIN** first.
+
+**Lock PIN**: Exactly four digits. If `PIN` is selected but no valid PIN is set, locks cannot be operated from the watch at all (`Lock PIN not set`) - the widget does not fall back to no PIN.
+
+Entering the PIN works like the passcode of the Garmin Pay wallet:
+
+- Four slots at the top fill up as you enter digits - the digits themselves are never shown - and the PIN is checked as soon as the fourth one is in.
+- On **touchscreen** watches you tap the digits on a keypad. The buttons work as well: up/down move a highlight over the keys and select presses it (for watches with the touchscreen switched off).
+- On **button** watches you choose each digit on a wheel with up/down and take it with select.
+- Back deletes the last digit, or leaves the screen when there is none.
+- After a wrong PIN you can try again. **Three wrong entries in a row lock it**, also across restarts of the widget, until you **set a new PIN** in the app settings - just as the wallet has to be reset in Garmin Connect. A correct entry resets the count.
+
+The settings exist in the ConnectIQ app only, on purpose: a switch on the watch would let anyone holding the watch turn the PIN off.
+
+***Note:*** *Not available on [low-memory devices](#low-memory-devices).*
 
 ### Logging in
 Once you have configured all settings in the ConnectIQ app, the next step will be to login.
@@ -316,6 +351,23 @@ HassControl also supports the following controls:
 
 On touchscreen devices, the long press gesture provides a convenient way to access the menu without using the physical menu button.
 
+### Without the phone: waiting, Wi-Fi and LTE
+
+***Note:*** *This section does not apply to [low-memory devices](#low-memory-devices).*
+
+**Waiting for the phone.** If you open the widget while the phone is not connected, it shows `Waiting for phone` instead of failing with `Phone not connected` and closing. Once the phone connects, the loader disappears and the entity states are refreshed. Press back to leave the loader and look at the last known states in the meantime; the refresh still happens once the phone is back.
+
+**Wi-Fi/LTE.** Watches with Wi-Fi or LTE can send actions without the phone, the way [GarminHomeAssistant](https://github.com/house-of-abbey/GarminHomeAssistant/blob/main/Wi-Fi.md) does it. Enable `Send actions over Wi-Fi/LTE when the phone is not connected` in the app settings. Then, while the phone is not connected, selecting an entity asks e.g. `Unlocking Front Door via Wi-Fi/LTE?`; confirm, and the watch starts a sync - the system sync screen - during which it sends the action to Home Assistant itself. With Wi-Fi/LTE available the widget does not wait for the phone at startup either.
+
+Limits:
+
+- **Actions only.** Entity states are not refreshed over Wi-Fi/LTE: you see and act on the last states known from the phone. Toggling uses those states, so e.g. a light already switched on elsewhere may be switched on again rather than off.
+- **Slow.** The watch first has to join your Wi-Fi access point (or the LTE network), which takes a while, and Wi-Fi/LTE use costs battery. Treat it as a last resort, not a way of operating.
+- **https only**, and the watch does the TLS handshake itself. Some Garmin models only offer cipher suites without forward secrecy over Wi-Fi, which many servers (Nabu Casa, Cloudflare, current nginx/Apache defaults) refuse - see the [FAQ](#wi-filte-the-sync-fails-with-unknown-error-0). An `http://localhost` host cannot be used here.
+- You have to be in range of the Wi-Fi access point configured on the watch. LTE reaches further, but your carrier may charge for it.
+- The [lock confirmation](#lock-confirmation) still applies. With `Yes/no question`, the Wi-Fi/LTE question is the only one asked.
+- A confirmed action that cannot be sent within two minutes is dropped, so an unlock can never happen unexpectedly on some later automatic sync.
+
 ### Header Authentication
 
 Since `v1.5.0` it's possible to specify an arbitraty header in the settings.
@@ -367,6 +419,8 @@ home-assistant.mydomain.com {
 #### Error message: "Check settings, invalid url"
 Check if you are using correct url with `https` prefix, because only secure HTTPS communication is allowed. This limitation comes from Garmin.
 
+The one exception is plain `http://` to a server on the phone itself, see [Host](#basic-settings) (not on [low-memory devices](#low-memory-devices)).
+
 #### Some entities from my group are missing in my Garmin device
 Not all Home Assistant entity types are currently supported by HassControl, you should take a look at [supported entity types table](#supported-entity-types).
 
@@ -388,3 +442,8 @@ This is a deliberate safeguard on [low-memory devices](#low-memory-devices) — 
 #### My watch has no "List View" option, or ignores custom icons
 Your watch is one of the [low-memory devices](#low-memory-devices). The 3-row list view and the Home Assistant `icon:` / `device_class` icons are not built for those watches, because the memory they need is memory those watches don't have. Everything else works normally.
 
+#### Error message: "PIN locked"
+The lock PIN was entered wrong three times in a row, so lock control is blocked - like the Garmin Pay wallet after three wrong passcodes. Set a new PIN under `Lock PIN` in the ConnectIQ app settings to unblock it (to keep your old PIN, change it once and then back). See [Lock confirmation](#lock-confirmation).
+
+#### Wi-Fi/LTE: the sync fails with "Unknown error (0)"
+Over Wi-Fi/LTE the watch makes the TLS connection to your server itself, without the phone. Response code 0 means the handshake failed: some Garmin watches (confirmed for the Epix Gen 2, likely the Fenix 7 Pro and Forerunner 265) only offer TLS 1.2 cipher suites without forward secrecy over Wi-Fi, and servers that require ECDHE refuse them. There is no fix in the widget - it is a limitation of the watch firmware. If you control the server's TLS settings you may be able to allow such a connection; GarminHomeAssistant's [Wi-Fi notes](https://github.com/house-of-abbey/GarminHomeAssistant/blob/main/Wi-Fi.md#limits-of-use) collect what users found.

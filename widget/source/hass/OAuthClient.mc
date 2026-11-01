@@ -85,6 +85,17 @@ module Hass {
             }
         }
 
+        // Communications.cancelAllRequests() can drop a request without ever
+        // calling back. If that was a token refresh, _isFetchingAccessToken
+        // would stay set and block every later request; the requests queued
+        // behind it are dropped too. (:fullmem: only a cancelled Wi-Fi/LTE
+        // sync cancels requests - see HassSyncDelegate.onStopSync().)
+        (:fullmem)
+        function onRequestsCancelled() {
+            _isFetchingAccessToken = false;
+            _tokenCallbacks = new [0];
+        }
+
         function _setIsLoggingIn(isLoggingIn) {
             Utils.debugLog("is logging in: ", isLoggingIn, null);
             _isLoggingIn = isLoggingIn;

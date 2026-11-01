@@ -576,7 +576,7 @@ module Hass {
     // refresh at startup, which used to start two chains walking the same
     // entity list: two requests in flight, two response buffers, two queues.
     // On a 64 KB device that duplicate is a large slice of the free heap.
-    if (_refreshActive) {
+    if (_refreshActive || !_canRefresh()) {
       return;
     }
     _refreshActive = true;
@@ -589,6 +589,22 @@ module Hass {
     }
 
     _refreshPendingEntities(null, null);
+  }
+
+  // Without the phone every request of the chain fails, and the first
+  // "Phone not connected" error closes the app - a "Refresh on show" in
+  // onShow() would do that right while ConnectionWait waits for the phone,
+  // or when the system sync screen of a Wi-Fi/LTE action closes. Skip it:
+  // ConnectionWait refreshes once the phone is there. (:fullmem only - the
+  // 64 KB devices keep the old behavior.)
+  (:fullmem)
+  function _canRefresh() {
+    return System.getDeviceSettings().phoneConnected;
+  }
+
+  (:lowmem)
+  function _canRefresh() {
+    return true;
   }
 
   function _refreshTransitionalEntities(){
@@ -795,13 +811,21 @@ module Hass {
 
   (:fullmem)
   function selectOption(entity, option) {
+    var params = { "option" => option };
+
+    // No phone: offer to send it over Wi-Fi/LTE (see WifiLte.mc).
+    if (WifiLte.shouldUse()) {
+      WifiLte.offerService(entity, "select_option", params, "Selecting\n" + option);
+      return;
+    }
+
     App.getApp().viewController.showLoader("Selecting");
 
     client.callService(
       entity.getServiceDomain(),
       "select_option",
       entity.getId(),
-      { "option" => option },
+      params,
       Utils.method(Hass, :onSelectOptionCompleted)
     );
   }
@@ -835,13 +859,26 @@ module Hass {
 
   (:fullmem)
   function setInputNumberValue(entity, value) {
+    var params = { "value" => value };
+
+    // No phone: offer to send it over Wi-Fi/LTE (see WifiLte.mc).
+    if (WifiLte.shouldUse()) {
+      WifiLte.offerService(
+        entity,
+        "set_value",
+        params,
+        "Setting " + entity.getRawName() + "\nto " + Utils.formatNumberForStep(value, entity.getStep())
+      );
+      return;
+    }
+
     App.getApp().viewController.showLoader("Setting");
 
     client.callService(
       entity.getServiceDomain(),
       "set_value",
       entity.getId(),
-      { "value" => value },
+      params,
       Utils.method(Hass, :onSetInputNumberValueCompleted)
     );
   }
@@ -928,8 +965,46 @@ module Hass {
       entityType = "input_button";
     }
 
+    // No phone: offer to send it over Wi-Fi/LTE instead (:fullmem, see
+    // WifiLte.mc).
+    if (_offerWifiLte(entity, entityType, action, loadingText)) {
+      return;
+    }
+
     App.getApp().viewController.showLoader(loadingText);
 
     client.setEntityState(entityId, entityType, action, Utils.method(Hass, :onToggleEntityStateCompleted));
+  }
+
+  // Returns true when the action was handed to a Wi-Fi/LTE prompt instead.
+  (:fullmem)
+  function _offerWifiLte(entity, entityType, action, loadingText) {
+    if (!WifiLte.shouldUse()) {
+      return false;
+    }
+
+    if (entity.getType() == Entity.TYPE_SCENE) {
+      // Scenes fall through toggleEntityState() with the generic "Loading".
+      loadingText = "Activating";
+    }
+
+    var command = {
+      "id" => entity.getId(),
+      "domain" => entityType
+    };
+
+    // null for scenes - see Client.setEntityState(). Left out rather than
+    // stored as null.
+    if (action != null) {
+      command["action"] = action;
+    }
+
+    WifiLte.offer(command, loadingText + "\n" + entity.getRawName());
+    return true;
+  }
+
+  (:lowmem)
+  function _offerWifiLte(entity, entityType, action, loadingText) {
+    return false;
   }
 }

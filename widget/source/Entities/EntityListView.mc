@@ -115,7 +115,8 @@ class EntityListDelegate extends Ui.BehaviorDelegate {
     return true;
   }
 
-  // Routes TYPE_SELECT/TYPE_INPUT_NUMBER to their dedicated menu/edit view.
+  // Routes TYPE_SELECT/TYPE_INPUT_NUMBER to their dedicated menu/edit view,
+  // and TYPE_LOCK to its optional confirmation (LockConfirm.request()).
   // Returns true when handled (caller should not also toggleEntity()).
   //
   // Split out (rather than inlined in toggleCurrentEntity() above) so the
@@ -134,6 +135,11 @@ class EntityListDelegate extends Ui.BehaviorDelegate {
     if (entity.getType() == Hass.TYPE_INPUT_NUMBER) {
       var editView = new InputNumberEditView(entity);
       Ui.pushView(editView, new InputNumberEditDelegate(entity, editView), Ui.SLIDE_IMMEDIATE);
+      return true;
+    }
+    // The optional yes/no question or PIN before a lock is locked/unlocked
+    // (the "lockConfirmation" setting) - :fullmem only, like the above.
+    if (entity.getType() == Hass.TYPE_LOCK && LockConfirm.request(entity)) {
       return true;
     }
     return false;
