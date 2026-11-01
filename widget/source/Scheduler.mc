@@ -7,8 +7,9 @@ using Toybox.Timer;
 //
 // Connect IQ only lets an app run a few timers at once (3 by default, the
 // exact number depends on the device) and throws "Too Many Timers Error"
-// past that - on some firmware also when start() is called on a timer that
-// is still running. The app used to own up to seven: the inactivity,
+// past that. start() on a timer that is still running may (undocumented)
+// raise it as well - the SDK only says a stopped timer can be started
+// again. The app used to own up to seven: the inactivity,
 // loader, transitional-refresh and finalize timers, the page bar timer of
 // the entity view, plus a new one for every "Close App after successful
 // action" and for every "Phone not connected" Error. Toggling a cover in the
@@ -18,7 +19,10 @@ using Toybox.Timer;
 // Jobs are keyed by a Symbol. Scheduling a key that is still pending
 // replaces that job (its deadline moves), so repeated calls - a refresh
 // chain finishing twice, one "Phone not connected" error per entity - can
-// never pile up. The timer is never start()ed without a stop() first.
+// never pile up. Give every purpose a key of its own: the app's exits are
+// :exitPhoneLost, :exitAfterAction and :exitAfterSync, so none of them
+// replaces another, and each can be cancelled by itself. The timer is
+// never start()ed without a stop() first.
 //
 // Do not create Timer.Timer objects anywhere else in the app.
 module Scheduler {
@@ -65,8 +69,8 @@ module Scheduler {
       _timer = new Timer.Timer();
       _onTimerMethod = new Lang.Method(Scheduler, :_onTimer);
     } else {
-      // Always stop before start: starting a timer that is still running is
-      // exactly what can raise "Too Many Timers Error" on its own.
+      // Always stop before start: start() on a timer that is still running
+      // may (undocumented) raise "Too Many Timers Error" on its own.
       _timer.stop();
     }
 
@@ -80,6 +84,13 @@ module Scheduler {
     _timer.start(_onTimerMethod, wait, false);
   }
 
+  // The timer's callback: runs every job that is due, then re-arms the
+  // timer for the earliest one still pending.
+  //
+  // Jobs due in the same wake-up run in the order of _jobs.keys(), which a
+  // Dictionary leaves unspecified, and all within this one event - so they
+  // share one watchdog budget. No call site relies on the order of its job
+  // against another's.
   function _onTimer() {
     _armedDue = null;
 

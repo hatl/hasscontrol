@@ -48,7 +48,7 @@ module Hass {
   }
 
   function getGroup() {
-    var group = App.Properties.getValue("group");
+    var group = Utils.getProperty("group", "Garmin");
 
     if (group == null || group.length() == 0) {
       return null;
@@ -499,7 +499,9 @@ module Hass {
     if(noop != null && noop.isTransitional()){
       _transitionalEntities.add(noop);
       // Every transitional entity in a chain lands here; the keyed job is
-      // simply moved instead of starting the timer once per entity (#101).
+      // simply moved. The dedicated timer this used to have was start()ed
+      // again for each of them while still running, which may
+      // (undocumented) raise "Too Many Timers Error" (#101).
       Scheduler.schedule(:transitional, Utils.method(Hass, :_refreshTransitionalEntities), 2000);
     }
 
@@ -536,14 +538,18 @@ module Hass {
   }
 
   // Defers work that must not run on an HTTP response's stack, where the
-  // parsed body is still live. By the time the timer fires, onWebResponse()
-  // has returned and the response is collectable.
+  // parsed body is still live. By the time the :deferred job runs (see
+  // Scheduler), onWebResponse() has returned and the response is
+  // collectable.
   function _scheduleDeferred() {
     Scheduler.schedule(:deferred, Utils.method(Hass, :_runDeferred), Scheduler.MIN_DELAY);
   }
 
-  // One timer serves both deferred jobs. A pending import wins: it ends by
-  // starting a refresh, which schedules the finalize again afterwards.
+  // The one :deferred job covers both kinds of deferred work: building an
+  // imported group and finishing a refresh. A pending import wins: it ends
+  // by starting a refresh, which schedules the job again to finish - or,
+  // without the phone, schedules it right away (see
+  // _buildImportedEntities()).
   function _runDeferred() {
     if (_pendingImportIds != null) {
       _buildImportedEntities();
@@ -553,8 +559,9 @@ module Hass {
     _finishRefresh();
   }
 
-  // Tail of a completed refresh chain. Runs from a timer so the HTTP response
-  // that triggered it has already been released.
+  // Tail of a completed refresh chain. Runs as the deferred job (see
+  // _scheduleDeferred()), so the HTTP response that triggered it has already
+  // been released.
   function _finishRefresh() {
     Utils.logMem("finishRefresh:enter", null);
 
@@ -594,9 +601,16 @@ module Hass {
   // Without the phone every request of the chain fails, and the first
   // "Phone not connected" error closes the app - a "Refresh on show" in
   // onShow() would do that right while ConnectionWait waits for the phone,
-  // or when the system sync screen of a Wi-Fi/LTE action closes. Skip it:
-  // ConnectionWait refreshes once the phone is there. (:fullmem only - the
-  // 64 KB devices keep the old behavior.)
+  // or when the system sync screen of a Wi-Fi/LTE action closes. So
+  // refreshAllEntities() does nothing then - silently: callers must not
+  // count on the refresh finishing, or on it removing a loader (see
+  // _buildImportedEntities()).
+  //
+  // The trade-off: only the wait at launch (ConnectionWait) refreshes once
+  // the phone is there. After a disconnect later on, nothing refreshes by
+  // itself when the phone comes back - the stored states stay until the
+  // next refresh is asked for (Refresh on show, the menu, the next launch).
+  // (:fullmem only - the 64 KB devices keep the old behavior.)
   (:fullmem)
   function _canRefresh() {
     return System.getDeviceSettings().phoneConnected;
@@ -628,20 +642,21 @@ module Hass {
       return;
     }
 
-    // Hold on to the id list only, then let the timer build the entities.
-    // Building them here would do it inside onWebResponse(), where the whole
-    // parsed group response is still live - 2.4 KB for a 12-member group,
-    // measured on Instinct 2X, against 1.6 KB of free heap. Keeping just the
-    // id array keeps the ids (which the entities reference anyway) and drops
-    // the rest of the response.
+    // Hold on to the id list only, then let the deferred job build the
+    // entities. Building them here would do it inside onWebResponse(), where
+    // the whole parsed group response is still live - 2.4 KB for a 12-member
+    // group, measured on Instinct 2X, against 1.6 KB of free heap. Keeping
+    // just the id array keeps the ids (which the entities reference anyway)
+    // and drops the rest of the response.
     _pendingImportIds = data[:body]["attributes"]["entity_id"];
     Utils.logMem("import:parsed n", _pendingImportIds.size());
 
     _scheduleDeferred();
   }
 
-  // Rebuilds _entities from the imported group. Runs from the deferred timer,
-  // so the group response has already been released.
+  // Rebuilds _entities from the imported group. Runs as the deferred job
+  // (see _scheduleDeferred()), so the group response has already been
+  // released.
   function _buildImportedEntities() {
     var ids = _pendingImportIds;
     _pendingImportIds = null;
@@ -690,7 +705,18 @@ module Hass {
     // The entity list was just replaced, so any refresh chain still walking
     // the old list is stale. Clear the guard so this refresh always starts.
     _refreshActive = false;
-    refreshAllEntities(false);
+
+    if (_canRefresh()) {
+      refreshAllEntities(false);
+    } else {
+      // The phone dropped since the group response came in (the ~50 ms of
+      // the deferral). refreshAllEntities() would do nothing at all (see
+      // _canRefresh()), so _finishRefresh() would never run: the
+      // "Refreshing" loader would stay up and the new list would not be
+      // stored. With _pendingImportIds already cleared above, the deferred
+      // job goes straight to _finishRefresh().
+      _scheduleDeferred();
+    }
 
     if (dropped > 0) {
       // Tell the user rather than silently showing a short list.
@@ -770,11 +796,12 @@ module Hass {
     App.getApp().viewController.removeLoader();
 
     // Check if we should exit after action
-    if (App.Properties.getValue("closeAfterAction")) {
+    if (Utils.getProperty("closeAfterAction", false)) {
       // Small delay before exiting to ensure UI updates are seen by user.
       // This used to start a brand-new Timer for every action - one of the
-      // timers behind "Too Many Timers Error" (issue #101).
-      Scheduler.schedule(:exit, Utils.method(Hass, :exitApplication), 2000);
+      // timers behind "Too Many Timers Error" (issue #101). Each exit reason
+      // has a key of its own, so none replaces or cancels another.
+      Scheduler.schedule(:exitAfterAction, Utils.method(Hass, :exitApplication), 2000);
     }
   }
 

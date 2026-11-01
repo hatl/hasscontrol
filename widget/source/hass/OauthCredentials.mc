@@ -23,7 +23,7 @@ module Hass {
 
         function loadLongLivedToken() {
             // If the user has specified an access token in settings
-            var accessToken = App.Properties.getValue("accessToken");
+            var accessToken = Utils.getProperty("accessToken", "");
             if (accessToken != null && accessToken.length() > 0 ) {
                 Utils.debugLog("Initializing with long-lived access token", null, null);
                 _fixedAccessToken = true;

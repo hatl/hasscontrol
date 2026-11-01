@@ -1,3 +1,4 @@
+using Toybox.Application as App;
 using Toybox.WatchUi as Ui;
 using Toybox.System;
 
@@ -22,7 +23,17 @@ class Error {
             // One keyed job however many of these are built - every request
             // that fails this way builds one, and each used to start a Timer
             // of its own: "Too Many Timers Error" once three ran (issue #101).
-            Scheduler.schedule(:exit, method(:exitApplication), 2500);
+            // The key is this exit reason's own, so it can be cancelled
+            // without touching the other exits (ConnectionWait does, when
+            // the phone is back).
+            //
+            // Not while the wait for the phone at launch is pending
+            // (:fullmem, see ConnectionWait): closing the app would end the
+            // wait, which refreshes once the phone is back - an action tried
+            // meanwhile just shows this error.
+            if (!App.getApp().isWaitingForPhone()) {
+                Scheduler.schedule(:exitPhoneLost, method(:exitApplication), 2500);
+            }
             return;
         }
 

@@ -287,7 +287,7 @@ class EntityListView extends Ui.View {
   }
 
   function onShow() {
-    if (App.Properties.getValue("refresh")) {
+    if (Utils.getProperty("refresh", false)) {
       Hass.refreshAllEntities(true);
     }
   }
@@ -755,9 +755,10 @@ class EntityListView extends Ui.View {
 
   // Shows the page bar on every index change and hides it a second after
   // the last one. _mTimerActive used to guard this, but nothing ever set it,
-  // so every scroll start()ed the still-running bar timer again - one of
-  // the timers behind "Too Many Timers Error" (issue #101). Rescheduling the
-  // keyed job just moves the hide.
+  // so every scroll start()ed the bar timer again while it was still
+  // running - which may (undocumented) raise "Too Many Timers Error" by
+  // itself, and the bar timer was one of the app's timers behind issue
+  // #101 anyway. Rescheduling the keyed job just moves the hide.
   function shouldShowBar() {
     var index = _mController.getIndex();
 

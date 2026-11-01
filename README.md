@@ -44,7 +44,7 @@ Please read through the instructions below, I will try to guide you through the 
 
 ### Prerequisites
 In order to use this widget you need to have an Home Assistant instance accessible over https using an official SSL certificate (no self-signed).
-On watches other than the [low-memory devices](#low-memory-devices), plain `http://` is accepted for one exception: a server on the phone itself (`http://localhost`, `http://127.0.0.1` or `http://[::1]`), e.g. a local proxy app that forwards to Home Assistant - see [Host](#basic-settings).
+On watches other than the [low-memory devices](#low-memory-devices), the widget accepts plain `http://` for one exception: the phone itself (`http://localhost`, `http://127.0.0.1` or `http://[::1]`), meant for a local proxy app on the phone that forwards to Home Assistant. Whether the Garmin Connect app passes such requests on has not been verified - see [Host](#basic-settings).
 
 As all communication from Garmin watches go thru the mobile device, you also need to have a paired mobile phone, and the Garmin Connect app needs to be running on that phone.
 
@@ -165,7 +165,7 @@ Open the widget settings in the ConnectIQ app.
 
 **Host**: This should be the url to the Home Assistant instance you would like to control. Remember only https url is supported by Garmin.
 
-The one exception (not on [low-memory devices](#low-memory-devices)): plain http to the phone itself - `http://localhost`, `http://127.0.0.1` or `http://[::1]`, optionally with a port and path, e.g. `http://localhost:8123`. As every request goes through the phone, this reaches a server running on the phone, such as a local proxy app forwarding to Home Assistant on your network. Only the host itself counts: `http://localhost.example.com` is a different host and is still rejected. Such a host cannot be used [over Wi-Fi/LTE](#without-the-phone-waiting-wi-fi-and-lte), where the watch connects by itself.
+The one exception (not on [low-memory devices](#low-memory-devices)): plain http to the phone itself - `http://localhost`, `http://127.0.0.1` or `http://[::1]`, followed by nothing but an optional port and path, e.g. `http://localhost:8123`. Upper or lower case does not matter (`Http://localhost` is accepted too). Only the host itself counts: `http://localhost.example.com` is a different host and is still rejected. As every request goes through the phone, this is meant to reach a server running on the phone, such as a local proxy app forwarding to Home Assistant on your network. The widget accepts such a host, and it works in the Connect IQ simulator, but whether the Garmin Connect app on the phone relays plain http to the phone itself has not been verified - iOS and Android restrict unencrypted (cleartext) connections, which may block it. Such a host cannot be used [over Wi-Fi/LTE](#without-the-phone-waiting-wi-fi-and-lte), where the watch connects by itself.
 
 **Long-Lived access token**: If you prefer generating an access token in Home Assistant instead of login in thru the garmin app you can paste your token here.
 
@@ -225,7 +225,7 @@ Because there is no reliable way for the watch to detect whether a display suppo
 
 **Battery percentage reporting**: Configure an arbitrary entity name (a-z, 0-9, _) to which the battery status of the watch should be reported.
 e.g., "venu2_battery" (**excluding** the "sensor." prefix)
-The battery value is being sent to Home Assistant once - when the app is started.
+The battery value is being sent to Home Assistant once - when the app is started. Except on [low-memory devices](#low-memory-devices): if the phone is not connected then, it is sent once the phone connects - provided that happens within the 3 minutes the widget waits for it (see [Waiting for the phone](#without-the-phone-waiting-wi-fi-and-lte)).
 The corresponding entity is created automatically (e.g., "sensor.venu2_battery").
 
 ***Optionally***, you can configure a dedicated entity **before** the first use:
@@ -355,9 +355,18 @@ On touchscreen devices, the long press gesture provides a convenient way to acce
 
 ***Note:*** *This section does not apply to [low-memory devices](#low-memory-devices).*
 
-**Waiting for the phone.** If you open the widget while the phone is not connected, it shows `Waiting for phone` instead of failing with `Phone not connected` and closing. Once the phone connects, the loader disappears and the entity states are refreshed. Press back to leave the loader and look at the last known states in the meantime; the refresh still happens once the phone is back.
+**Waiting for the phone.** If you open the widget while the phone is not connected, and you are logged in (or [battery reporting](#battery-and-performance) is set up), it shows `Waiting for phone` instead of failing with `Phone not connected` and closing. Once the phone connects, the loader disappears and the entity states are refreshed (and the battery level is reported, if set up). Press back to leave the loader and look at the last known states in the meantime; the refresh still happens once the phone is back.
 
-**Wi-Fi/LTE.** Watches with Wi-Fi or LTE can send actions without the phone, the way [GarminHomeAssistant](https://github.com/house-of-abbey/GarminHomeAssistant/blob/main/Wi-Fi.md) does it. Enable `Send actions over Wi-Fi/LTE when the phone is not connected` in the app settings. Then, while the phone is not connected, selecting an entity asks e.g. `Unlocking Front Door via Wi-Fi/LTE?`; confirm, and the watch starts a sync - the system sync screen - during which it sends the action to Home Assistant itself. With Wi-Fi/LTE available the widget does not wait for the phone at startup either.
+The widget waits for up to 3 minutes. Then it gives up: the loader disappears and the last known states stay on screen.
+
+No loader is shown in two cases - the widget then waits quietly, and still refreshes once the phone connects:
+
+- When Wi-Fi/LTE (see below) can be used: you can act on the last known states right away.
+- On watches without widget glances (or with glances turned off), where the widget opens on its `HassControl` title page: that page stays usable, so you can still scroll on to the next widget.
+
+Actions you take without the phone (and without Wi-Fi/LTE) still show `Phone not connected` and close the widget about 2.5 seconds later - except while the widget is still waiting for the phone after you opened it: then only the message is shown.
+
+**Wi-Fi/LTE.** Watches with Wi-Fi or LTE can send actions without the phone, the way [GarminHomeAssistant](https://github.com/house-of-abbey/GarminHomeAssistant/blob/main/Wi-Fi.md) does it. Enable `Send actions over Wi-Fi/LTE when the phone is not connected` in the app settings. Then, while the phone is not connected, selecting an entity asks e.g. `Unlocking Front Door via Wi-Fi/LTE?`; confirm, and the watch starts a sync - the system sync screen - during which it sends the action to Home Assistant itself. With Wi-Fi/LTE available the widget still waits for the phone at startup, but without the `Waiting for phone` loader (see above).
 
 Limits:
 
@@ -419,7 +428,7 @@ home-assistant.mydomain.com {
 #### Error message: "Check settings, invalid url"
 Check if you are using correct url with `https` prefix, because only secure HTTPS communication is allowed. This limitation comes from Garmin.
 
-The one exception is plain `http://` to a server on the phone itself, see [Host](#basic-settings) (not on [low-memory devices](#low-memory-devices)).
+The one exception is plain `http://` to the phone itself - `http://localhost`, `http://127.0.0.1` or `http://[::1]`, followed by nothing but an optional port and path, in upper or lower case (not on [low-memory devices](#low-memory-devices)). Whether the Garmin Connect app relays such requests has not been verified, see [Host](#basic-settings).
 
 #### Some entities from my group are missing in my Garmin device
 Not all Home Assistant entity types are currently supported by HassControl, you should take a look at [supported entity types table](#supported-entity-types).

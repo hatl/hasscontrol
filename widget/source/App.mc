@@ -15,6 +15,10 @@ class HassControlApp extends App.AppBase {
   var viewController;
   var menu;
 
+  // The wait for the phone at launch, see startStartupWork(). :fullmem only.
+  (:fullmem)
+  hidden var _connectionWait = null;
+
   function initialize() {
     AppBase.initialize();
   }
@@ -139,8 +143,6 @@ class HassControlApp extends App.AppBase {
     Hass.loadScenesFromSettings();
     Utils.logMem("init:5 scenes n", Hass.getEntities().size());
 
-    startStartupWork();
-
     var deviceSettings = System.getDeviceSettings();
     var view = null;
     var delegate = null;
@@ -172,6 +174,13 @@ class HassControlApp extends App.AppBase {
       delegate = new BaseDelegate();
     }
 
+    // Only now that the view is chosen: BaseView (devices without glances)
+    // is the widget's own page in the widget loop. A "Waiting for phone"
+    // loader pushed over it would take up/down and so block scrolling on
+    // through the loop - the wait runs without one there (see
+    // ConnectionWait).
+    startStartupWork(!(view instanceof BaseView));
+
     // Start inactivity timer if configured
     resetInactivityTimer();
 
@@ -200,21 +209,22 @@ class HassControlApp extends App.AppBase {
       } else {
         Hass.refreshAllEntities(true);
       }
-      Utils.logMem("init:6 refreshStarted", null);
+      Utils.logMem("startupWork: refreshStarted", null);
     }
 
-    var battery_entity_id = App.Properties.getValue("report_battery_id");
+    var battery_entity_id = Utils.getProperty("report_battery_id", "");
     if (battery_entity_id != null && battery_entity_id.length() > 0) {
       Hass.reportBatteryValue(battery_entity_id);
     }
   }
 
   // Without the phone every startup request fails, and the "Phone not
-  // connected" error closes the app 2.5 s later. Instead, show a loader and
-  // start once the phone is there (see ConnectionWait).
+  // connected" error closes the app 2.5 s later. Instead, wait for the phone
+  // and start once it is there (see ConnectionWait) - behind a "Waiting for
+  // phone" loader, unless `showLoader` is false (see getInitialView()).
   (:fullmem)
-  hidden function startStartupWork() {
-    var batteryId = App.Properties.getValue("report_battery_id");
+  hidden function startStartupWork(showLoader) {
+    var batteryId = Utils.getProperty("report_battery_id", "");
 
     if (!isLoggedIn() && (batteryId == null || batteryId.length() == 0)) {
       // Nothing to send, nothing to wait for.
@@ -226,12 +236,28 @@ class HassControlApp extends App.AppBase {
       return;
     }
 
-    new ConnectionWait().start();
+    _connectionWait = new ConnectionWait(showLoader);
+    _connectionWait.start();
   }
 
   (:lowmem)
-  hidden function startStartupWork() {
+  hidden function startStartupWork(showLoader) {
     runStartupWork();
+  }
+
+  // Whether the wait for the phone at launch is still going on. Meanwhile a
+  // "Phone not connected" error must not close the app (see
+  // Error.initialize()): that would end the wait, which refreshes once the
+  // phone is back. False once the phone has connected or the wait has given
+  // up - and when there was none (phone connected at launch, sync mode).
+  (:fullmem)
+  function isWaitingForPhone() {
+    return _connectionWait != null && _connectionWait.isPending();
+  }
+
+  (:lowmem)
+  function isWaitingForPhone() {
+    return false;
   }
 
   // Wi-Fi/LTE execution (see WifiLte.mc). The system asks for this before
@@ -248,7 +274,7 @@ class HassControlApp extends App.AppBase {
 
   // Reset the inactivity timer - call this on any user interaction
   function resetInactivityTimer() {
-    var seconds = App.Properties.getValue("autoCloseSeconds");
+    var seconds = Utils.getProperty("autoCloseSeconds", 0);
     if (seconds == null || seconds == 0) {
       // Feature disabled, drop any pending timeout
       Scheduler.cancel(:inactivity);

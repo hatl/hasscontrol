@@ -47,7 +47,7 @@ module LockConfirm {
       return false;
     }
 
-    var mode = App.Properties.getValue("lockConfirmation");
+    var mode = Utils.getProperty("lockConfirmation", MODE_OFF);
 
     if (mode != MODE_YES_NO && mode != MODE_PIN) {
       return false;
@@ -111,7 +111,7 @@ module LockConfirm {
 
   // The configured PIN, or null unless it is exactly PIN_LENGTH digits.
   function getPin() {
-    var pin = App.Properties.getValue("lockPin");
+    var pin = Utils.getProperty("lockPin", "");
 
     if (pin == null) {
       return null;

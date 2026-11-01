@@ -13,7 +13,7 @@ The widget supports various Home Assistant entity types and handles both OAuth a
 - `hass/OAuthClient.mc`: Handles OAuth authentication flow
 - `hass/OauthCredentials.mc`: Manages storage and retrieval of authentication tokens
 - `Scheduler.mc`: The app's only `Timer.Timer`; every delayed callback is a keyed job on it (see Performance Considerations)
-- `ConnectionWait.mc` (fullmem): At launch without the phone, shows "Waiting for phone" and runs the startup requests once it connects
+- `ConnectionWait.mc` (fullmem): At launch without the phone, shows "Waiting for phone" and runs the startup requests once it connects; gives up after 3 minutes. No loader when Wi-Fi/LTE execution is usable or the initial view is `BaseView` (the widget-loop page on devices without glances, where a loader would block scrolling the loop) - the wait then runs quietly and still refreshes on connect. While it is pending, "Phone not connected" does not close the app (`HassControlApp.isWaitingForPhone()`, checked in `Error.initialize()`)
 - `hass/WifiLte.mc` (fullmem): Wi-Fi/LTE execution - stores an action, starts a system sync, and `HassSyncDelegate` sends it from inside the sync
 - `Lock/LockConfirm.mc`, `Lock/PinEntryView.mc` (fullmem): The optional yes/no question or wallet-style PIN before a lock is toggled
 
@@ -26,6 +26,7 @@ The widget supports various Home Assistant entity types and handles both OAuth a
 - Use camelCase for variables and methods
 - Prefix private/hidden variables with underscore (_variableName)
 - Use class prefix for enums and constants (e.g., `HASS_STATE_ON`, `ERROR_NOT_AUTHORIZED`)
+- Read settings with `Utils.getProperty(key, default)`, passing the default from `resources/properties.xml` - never `Properties.getValue()` directly: it throws `InvalidKeyException` for a key the stored settings do not have (after an app update that adds a setting, or with an older build's settings file in the simulator). `Properties.setValue()` is fine
 
 ## Classes and Modules
 - Place class methods in Monkey C modules with clear responsibilities
@@ -87,6 +88,7 @@ When adding a new entity type:
 - Cache entities and other data whenever possible using `App.Storage`
 - Use timers judiciously to avoid excessive battery drain
 - Never create a `Timer.Timer`: schedule a keyed job with `Scheduler.schedule(:key, method, ms)` and drop it with `Scheduler.cancel(:key)`. Connect IQ allows only a few running timers (3 by default) and throws "Too Many Timers Error" past that (issue #101); rescheduling a key moves its deadline instead of adding a timer
+- Give every purpose its own key, as a key's last schedule replaces the job before it: the app exits are `:exitPhoneLost` (`Error.mc`), `:exitAfterAction` (`Hass.mc`) and `:exitAfterSync` (`WifiLte.mc`), so none replaces or cancels another
 - A Wi-Fi/LTE sync (`startSync2()`) may restart the app in sync mode, where `getInitialView()` never ran: code reachable from `HassSyncDelegate` must not assume views, `viewController` or a loaded entity list (see `WifiLte.prepare()`)
 - Set appropriate refresh intervals for transitional states
 - Clean up resources (especially timers) when views are hidden or app is closed
@@ -111,6 +113,7 @@ When adding a new entity type:
 
 # Sync and Data Management
 - Use efficient entity synchronization with Home Assistant
+- On fullmem, `Hass.refreshAllEntities()` silently does nothing while the phone is not connected (`_canRefresh()`): callers must not rely on the refresh finishing or on it removing a loader (see `Hass._buildImportedEntities()`). Only `ConnectionWait` refreshes once the phone is back, and only at launch
 - Support group-based entity import from Home Assistant
 - Handle transitional states with appropriate refresh timers
 - Store entities for offline access

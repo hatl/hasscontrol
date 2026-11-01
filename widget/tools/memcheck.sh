@@ -20,8 +20,16 @@ for d in descentg1 enduro fenix5 fenix5s fenix6 fenix6s fenixchronos fr245 fr55 
   ( cd "$DIR" && "$SDK/bin/monkeyc" -f monkey.jungle -o "$OUT/$d.prg" -y "$KEY" \
       -d "$d" --build-stats 1 -r -O2 2>&1 ) |
   awk -v D="$d" -v L="$LIMIT" '
-    /Data:/ {s=1}
-    /Foreground/ {if (s==1) {dd=$2; s=2} else {cc=$2}}
+    # SDK <= 8.x prints "Data:" / "Code:" headers with per-section lines below;
+    # SDK 9.x prints "Foreground:" / "Glance:" headers with "Code: N" / "Data: N"
+    # lines below. Only the foreground figures count against the widget budget.
+    /^[[:space:]]*Data:[[:space:]]*$/ {mode="data"; next}
+    /^[[:space:]]*Code:[[:space:]]*$/ {mode="code"; next}
+    /^[[:space:]]*Foreground:[[:space:]]*$/ {sec="fg"; next}
+    /^[[:space:]]*(Glance|Background|Extended Code):/ {sec="other"; next}
+    /Foreground:[[:space:]]*[0-9]+/ {if (mode=="data") dd=$2; else if (mode=="code") cc=$2}
+    sec=="fg" && /Code:[[:space:]]*[0-9]+/ {cc=$2}
+    sec=="fg" && /Data:[[:space:]]*[0-9]+/ {dd=$2}
     /ERROR/ {e=$0}
     END { if (e != "") printf "%-20s %s\n", D, e
           else printf "%-20s %8d %8d %8d %10d\n", D, dd, cc, dd+cc, L-(dd+cc) }'

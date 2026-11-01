@@ -31,8 +31,8 @@ module Hass {
             _tokenCallbacks = new [0];
             _isLoggingIn = false;
             _isFetchingAccessToken = false;
-            _additionalHeaderKey = App.Properties.getValue("additional_header_key");
-            _additionalHeaderValue = App.Properties.getValue("additional_header_value");
+            _additionalHeaderKey = Utils.getProperty("additional_header_key", "");
+            _additionalHeaderValue = Utils.getProperty("additional_header_value", "");
         }
 
         function onSettingsChanged() {

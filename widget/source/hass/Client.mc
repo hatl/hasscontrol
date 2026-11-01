@@ -36,19 +36,17 @@ module Hass {
         }
 
         function refreshBaseUrl() {
-            var newUrl = App.Properties.getValue("host");
+            var newUrl = Utils.getProperty("host", "https://homeassistant.local");
             var chars = newUrl.toCharArray();
 
-            if (chars.size() < 8) {
-                _baseUrlIsValid = false;
-                return;
-            }
-
             // strip potential trailing slash
-            if (chars[chars.size() - 1] == '/') {
+            if (chars.size() > 0 && chars[chars.size() - 1] == '/') {
                 chars = chars.slice(0, chars.size() - 1);
             }
 
+            // Set even when the host is invalid (empty, say): initialize()
+            // and onSettingsChanged() build the auth URLs from it, and
+            // validateSettings() stops every request before it is used.
             _baseUrl = StringUtil.charArrayToString(chars);
 
             // verify that host is starting with "https://" - or is plain
@@ -58,25 +56,42 @@ module Hass {
 
         // Plain http is accepted for the loopback host only:
         // "http://localhost", "http://127.0.0.1" or "http://[::1]", each
-        // optionally followed by a port, path, query or fragment. Requests
-        // travel through the phone, so loopback means a server on the phone
+        // optionally followed by a port and a path. Requests travel through
+        // the phone, so loopback is meant to reach a server on the phone
         // itself - e.g. a local proxy app forwarding to Home Assistant on
-        // the LAN - and the traffic never leaves it unencrypted.
+        // the LAN. That works in the Connect IQ simulator; whether the
+        // Garmin Connect app relays plain http to the phone's own loopback
+        // has not been verified (iOS/Android cleartext policies may block
+        // it).
         //
-        // The host has to end right there: "http://localhost.example.com"
-        // is a different host on the internet and stays rejected.
+        // The host has to end right there - only the end of the URL, ":"
+        // (a port) or "/" (a path) may follow: "http://localhost.example.com"
+        // is a different host on the internet and stays rejected. "?" and
+        // "#" are refused too, as the API paths are appended to the URL. And
+        // so is any "@", wherever it is: "http://localhost:8123@evil.example.com"
+        // is user "localhost" with password "8123" at evil.example.com.
+        //
+        // Matched case-insensitively, as phone keyboards capitalise the
+        // first letter ("Http://localhost"); the URL is still used as typed.
         (:fullmem)
         hidden function isLoopbackHttpUrl(url) {
+            if (url.find("@") != null) {
+                return false;
+            }
+
+            var lower = url.toLower();
             var hosts = ["http://localhost", "http://127.0.0.1", "http://[::1]"];
 
             for (var i = 0; i < hosts.size(); i++) {
-                if (url.find(hosts[i]) == 0) {
-                    if (url.length() == hosts[i].length()) {
+                var length = hosts[i].length();
+
+                if (lower.find(hosts[i]) == 0) {
+                    if (lower.length() == length) {
                         return true;
                     }
 
-                    var next = url.substring(hosts[i].length(), hosts[i].length() + 1);
-                    return next.equals(":") || next.equals("/") || next.equals("?") || next.equals("#");
+                    var next = lower.substring(length, length + 1);
+                    return next.equals(":") || next.equals("/");
                 }
             }
 

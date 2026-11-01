@@ -42,7 +42,7 @@ module WifiLte {
   var _syncActive = false;
 
   function isEnabled() {
-    return App.Properties.getValue("wifiLteExecution") == true;
+    return Utils.getProperty("wifiLteExecution", false) == true;
   }
 
   // True when an action has to go out over Wi-Fi/LTE: the phone is not
@@ -239,8 +239,8 @@ module WifiLte {
   }
 
   function onSyncFinished(success) {
-    if (success && App.Properties.getValue("closeAfterAction")) {
-      Scheduler.schedule(:exit, new Lang.Method(Hass, :exitApplication), EXIT_DELAY);
+    if (success && Utils.getProperty("closeAfterAction", false)) {
+      Scheduler.schedule(:exitAfterSync, new Lang.Method(Hass, :exitApplication), EXIT_DELAY);
     } else {
       App.getApp().resetInactivityTimer();
     }

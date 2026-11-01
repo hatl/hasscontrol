@@ -1,27 +1,13 @@
 using Toybox.WatchUi as Ui;
 
+// The loader. Ui.ProgressBar is not a View: it gets no onShow()/onHide(),
+// so ViewController tracks whether it is on screen (isShowingLoader()).
 class ProgressView extends Ui.ProgressBar {
-    hidden var _isActive;
-
     function initialize() {
       ProgressBar.initialize("", null);
-      _isActive = false;
-    }
-
-    function isActive() {
-        return _isActive;
     }
 
     function setDisplayString(text) {
-        _isActive = true;
         ProgressBar.setDisplayString(text);
-    }
-
-    function onShow() {
-        _isActive = true;
-    }
-
-    function onHide() {
-        _isActive = false;
     }
 }

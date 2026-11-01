@@ -5,10 +5,33 @@ using Toybox.System;
 using Toybox.WatchUi;
 
 module Utils {
+  // Reads the app setting `key`, or returns `defaultValue` when it is null
+  // or missing. Every setting is read through here; pass the default from
+  // resources/properties.xml.
+  //
+  // Properties.getValue() throws InvalidKeyException for a key the stored
+  // settings do not have (see the SDK docs). That happens when the settings
+  // predate the key: on a device after an app update that adds a setting,
+  // and in the simulator when the settings file of an older build is reused
+  // - the lock confirmation crashed exactly like that. A stale settings file
+  // then means the default instead of a crash.
+  //
+  // (:glance) because the (:glance) modules OauthCredentials, OAuthClient
+  // and Client read settings too.
+  (:glance)
+  function getProperty(key, defaultValue) {
+    try {
+      var value = App.Properties.getValue(key);
+      return value != null ? value : defaultValue;
+    } catch (e) {
+      return defaultValue;
+    }
+  }
+
   function getScenesFromSettings() {
     var scenes = new [0];
 
-    var sceneString = App.Properties.getValue("scenes");
+    var sceneString = getProperty("scenes", "");
 
     if (sceneString != null && sceneString != "") {
       var chars = sceneString.toCharArray();
@@ -379,8 +402,8 @@ module Utils {
   function getIconTintColor(entity) {
     var state = entity.getState();
 
-    // "coloredIcons" has a default in properties.xml, so it is never null.
-    var colored = App.Properties.getValue("coloredIcons");
+    // Never null: getProperty() falls back to the default.
+    var colored = getProperty("coloredIcons", false);
 
     if (state == Hass.STATE_LOCKED) {
       return colored ? 0x4DAD51 : 0xFFFFFF; // secure: green / full white

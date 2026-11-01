@@ -153,7 +153,7 @@ class PinEntryView extends Ui.View {
 
     // There is no reliable way to tell a color display from a monochrome
     // one, so the "Colored icons" setting decides here too (see README).
-    var colored = App.Properties.getValue("coloredIcons") == true;
+    var colored = Utils.getProperty("coloredIcons", false) == true;
 
     drawHeader(dc, width, height, colored);
 

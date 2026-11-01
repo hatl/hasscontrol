@@ -70,7 +70,7 @@ class ViewController {
   // Returns true when the "useListView" setting is enabled, selecting the
   // 3-row list view instead of the classic single-card view.
   function useListEntityView() {
-    return App.Properties.getValue("useListView");
+    return Utils.getProperty("useListView", false);
   }
 
   // Rebuilds the entity view matching the configured start view in the
@@ -320,10 +320,6 @@ class ViewController {
         if (error instanceof Hass.OAuthError) {
           message += "\nauth ";
         }
-
-        if(error.code == Error.ERROR_PHONE_NOT_CONNECTED) {
-          Ui.popView(Ui.SLIDE_IMMEDIATE);
-          }
       }
 
       if (error.context != null) {
