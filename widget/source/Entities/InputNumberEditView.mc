@@ -166,6 +166,10 @@ class InputNumberEditView extends Ui.View {
   // highlight and the tappable region always agree.
   static const ZONE_FRACTION = 0.22;
 
+  // The bands' colour. DateTimeEditView draws the same bands, with this
+  // and ZONE_FRACTION.
+  static const ZONE_COLOR = 0x1A2A3A;
+
   hidden var _mEntity;
   hidden var _mStagedValue;
   hidden var _mDecimals;
@@ -210,7 +214,7 @@ class InputNumberEditView extends Ui.View {
   // fitted rectangle - with an explicit bgColor that mismatch shows up as a
   // sliver of the zone color bleeding past its rectangle.
   hidden function drawZone(dc, y, height, vw, glyph) {
-    var bgColor = 0x1A2A3A;
+    var bgColor = ZONE_COLOR;
     dc.setColor(bgColor, bgColor);
     dc.fillRectangle(0, y, vw, height);
 

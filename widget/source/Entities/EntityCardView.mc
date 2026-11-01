@@ -126,7 +126,7 @@ class EntityCardView extends Ui.View {
     var fontH = dc.getFontHeight(font);
 
     var name = Graphics.fitTextToArea(entity.getRawName(), font, fontWidth, fontH, true);
-    var value = Graphics.fitTextToArea(entity.getSensorValue(), font, fontWidth, fontH, true);
+    var value = Graphics.fitTextToArea(entity.getDisplayValue(), font, fontWidth, fontH, true);
 
     // Each line is explicitly vertically centered on its own Y (rather
     // than relying on dc.drawText()'s default anchor for an un-justified
@@ -164,23 +164,50 @@ class EntityCardView extends Ui.View {
   }
 
   // TYPE_SELECT (select and input_select share this type)/TYPE_INPUT_NUMBER
-  // (input_number and number) entities exist on every tier (see
+  // (input_number and number)/TYPE_DATETIME (input_datetime, date, time and
+  // datetime) entities exist on every tier (see
   // Entity.detectExtendedType()), but their distinctive icon is
-  // fullmem-only. The (:lowmem) stub returns null so the linker drops the
-  // two mdi bitmaps below from that build - drawIcon()'s null-drawable
-  // fallback then draws Rez.Drawables.Unknown, the same generic icon a
-  // TYPE_SENSOR with SENSOR_OTHER gets.
+  // fullmem-only. The (:lowmem) stub returns null so that build never
+  // loads the mdi bitmaps below (it still carries them: resources are not
+  // filtered by annotations) - drawIcon()'s null-drawable fallback then
+  // draws Rez.Drawables.Unknown, the same generic icon a TYPE_SENSOR with
+  // SENSOR_OTHER gets. Any other type gets null here as well, and with it
+  // the same fallback.
   (:fullmem)
-  hidden function fullmemOnlyIcon(type) {
+  hidden function fullmemOnlyIcon(entity) {
+    var type = entity.getType();
+
     if (type == Hass.TYPE_SELECT) {
       return WatchUi.loadResource(Rez.Drawables.MdiFormatListBulleted);
     }
-    return WatchUi.loadResource(Rez.Drawables.MdiNumeric);
+    if (type == Hass.TYPE_INPUT_NUMBER) {
+      return WatchUi.loadResource(Rez.Drawables.MdiNumeric);
+    }
+    if (type == Hass.TYPE_DATETIME) {
+      return WatchUi.loadResource(EntityCardView.dateTimeIcon(entity));
+    }
+    return null;
   }
 
   (:lowmem)
-  hidden function fullmemOnlyIcon(type) {
+  hidden function fullmemOnlyIcon(entity) {
     return null;
+  }
+
+  // A date/time entity's icon, by what it holds: mdi:calendar for a date,
+  // mdi:clock-outline for a time, mdi:calendar-clock for both. Shared with
+  // EntityListView.
+  (:fullmem)
+  static function dateTimeIcon(entity) {
+    var mode = DateTimeValue.modeOf(entity);
+
+    if (mode == DateTimeValue.MODE_DATE) {
+      return Rez.Drawables.MdiCalendar;
+    }
+    if (mode == DateTimeValue.MODE_TIME) {
+      return Rez.Drawables.MdiClockOutline;
+    }
+    return Rez.Drawables.MdiCalendarClock;
   }
 
   function drawIcon(dc, entity) {
@@ -285,8 +312,8 @@ class EntityCardView extends Ui.View {
       } else if (sensorClass == Hass.SENSOR_OTHER) {
         drawable = WatchUi.loadResource(Rez.Drawables.Unknown);
       }
-    } else if (type == Hass.TYPE_SELECT || type == Hass.TYPE_INPUT_NUMBER) {
-      drawable = fullmemOnlyIcon(type);
+    } else {
+      drawable = fullmemOnlyIcon(entity);
     }
     }
 

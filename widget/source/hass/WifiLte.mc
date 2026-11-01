@@ -392,8 +392,9 @@ module WifiLte {
   }
 
   // Shows the state the action produced, the same way
-  // Hass.onToggleEntityStateCompleted(), onSelectOptionCompleted() and
-  // onSetInputNumberValueCompleted() do for a request sent via the phone.
+  // Hass.onToggleEntityStateCompleted(), onSelectOptionCompleted(),
+  // onSetInputNumberValueCompleted() and onSetDateTimeValueCompleted() do
+  // for a request sent via the phone.
   // States that only a refresh can tell (e.g. a toggled cover) are left as
   // they are: there is no refresh over Wi-Fi/LTE.
   function applyResult(data) {
@@ -422,6 +423,15 @@ module WifiLte {
       entity.setState(params["option"]);
     } else if (params != null && params["value"] != null) {
       entity.setState(Utils.formatNumberForStep(params["value"], entity.getStep()));
+    } else if (params != null && entity.getType() == Hass.TYPE_DATETIME) {
+      // As Hass.onSetDateTimeValueCompleted() does.
+      var value = DateTimeValue.reportedState(entity, params);
+
+      if (value == null) {
+        return;
+      }
+
+      entity.setState(value);
     } else {
       return;
     }

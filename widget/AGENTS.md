@@ -16,6 +16,8 @@ The widget supports various Home Assistant entity types and handles both OAuth a
 - `ConnectionWait.mc` (fullmem): At launch without a direct connection (`WifiLte.hasDirectConnection()`: the phone, or on the `:directwifi` units - the Edge family, see `monkey.jungle` - a connected Wi-Fi), shows "Waiting for connection" and runs the startup requests once there is one; gives up after 3 minutes. No loader when Wi-Fi/LTE execution is usable or the initial view is `BaseView` (the widget-loop page on devices without glances, where a loader would block scrolling the loop) - the wait then runs quietly and still refreshes on connect. While a Wi-Fi/LTE sync is pending (`WifiLte.isSyncPending()`) it only reschedules itself. While the wait is pending, "Phone not connected" does not close the app (`HassControlApp.isWaitingForPhone()`, checked in `Error.initialize()`)
 - `hass/WifiLte.mc` (fullmem): Wi-Fi/LTE execution - stores an action, starts a system sync (deferred off the Confirmation callback, `:wifiLteStart`), and `HassSyncDelegate` sends it from inside the sync. The stored command must never be sent by a later sync without a prompt: it is cleared when the sync is cancelled (`onStopSync()`), after `COMMAND_MAX_AGE` (60 s; also by the `:wifiLteExpire` watchdog) and at the next normal launch (`dropStaleCommand()`, from `HassControlApp.startStartupWork()`). `hasDirectConnection()` (the phone, or a connected Wi-Fi radio - but only on the units built with the `:directwifi` annotation in `monkey.jungle`, the Edge family; on watches Wi-Fi reads as connected during and just after a sync, so there only the phone counts, and `shouldUse()` is always false on `:directwifi` units) is what `Client.hasConnection()`, `Hass._canRefresh()` and `ConnectionWait` check; with one, Wi-Fi/LTE execution is not offered (`shouldUse()`)
 - `Lock/LockConfirm.mc`, `Lock/PinEntryView.mc` (fullmem): The optional yes/no question or wallet-style PIN before a lock is toggled
+- `hass/DateTimeValue.mc` (fullmem): The date/time entities' values - parses their states, formats the display text and the service parameters, and converts `datetime.*` between UTC and the watch's local time with its own integer arithmetic (`System.getClockTime().timeZoneOffset`, not `Time.Gregorian.moment()`)
+- `Entities/DateTimeEditView.mc` (fullmem): The date/time editor (`DateTimeEditView` + `DateTimeEditDelegate`), laid out like `InputNumberEditView`: up/down step the active field (hold to repeat, `:fieldRepeat`), select moves to the next field and sends on the last, back moves to the previous field and cancels on the first
 
 # Code Style Guidelines
 
@@ -60,13 +62,14 @@ HassControl supports the following entity types:
 - `TYPE_SENSOR`: Sensors with values (temperature, humidity, etc.)
 - `TYPE_SELECT`: `select`/`input_select` entities (pick one of a list of options). Fullmem devices use a Menu2 picker. 64 KB widget devices (`:lowmem`, see `monkey.jungle`) show these read-only, the same as a plain sensor - no menu, no editing.
 - `TYPE_INPUT_NUMBER`: `input_number`/`number` entities (numeric value with min/max/step). Fullmem devices use a dedicated edit view (`InputNumberEditView.mc`: select confirms, back cancels). 64 KB widget devices show these read-only too, same as `TYPE_SELECT`.
+- `TYPE_DATETIME`: `input_datetime`/`date`/`time`/`datetime` entities (detected by id prefix, `input_datetime.` first). Fullmem devices use `DateTimeEditView.mc` and show `datetime.*` in local time; 64 KB widget devices show the state read-only, trimmed (`Entity.getDisplayValue()`), `datetime.*` in UTC. Whether an entity has a date, a time or both is derived, never stored (`DateTimeValue.modeOf()`): from the domain, and for `input_datetime` from its state string.
 
 ## Entity States
 Entities can be in various states:
 - Basic states: `STATE_ON`, `STATE_OFF`, `STATE_UNKNOWN`
 - Lock states: `STATE_LOCKED`, `STATE_UNLOCKED`, `STATE_LOCKING`, `STATE_UNLOCKING`
 - Cover states: `STATE_OPEN`, `STATE_CLOSED`, `STATE_OPENING`, `STATE_CLOSING`
-- Sensor state: `STATE_SENSOR` (with associated value) — also used for `TYPE_SELECT`'s current option and `TYPE_INPUT_NUMBER`'s current numeric value
+- Sensor state: `STATE_SENSOR` (with associated value) — also used for `TYPE_SELECT`'s current option, `TYPE_INPUT_NUMBER`'s current numeric value and `TYPE_DATETIME`'s state string (shown through `Entity.getDisplayValue()`)
 
 ## Adding New Entity Types
 When adding a new entity type:

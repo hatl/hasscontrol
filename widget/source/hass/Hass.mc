@@ -913,6 +913,71 @@ module Hass {
     );
   }
 
+  // input_datetime/date/time/datetime editing (DateTimeEditView) is
+  // :fullmem-only - same reasoning as select above. See DateTimeValue for
+  // the formats and services.
+  (:fullmem)
+  function onSetDateTimeValueCompleted(error, data) {
+    if (error != null) {
+      App.getApp().viewController.removeLoaderImmediate();
+      App.getApp().viewController.showError(error);
+      return;
+    }
+
+    if (data == null || data[:context] == null || data[:context][:entityId] == null) {
+      Utils.debugLog("Invalid set date/time value response", null, null);
+      App.getApp().viewController.removeLoader();
+      return;
+    }
+
+    var entity = getEntity(data[:context][:entityId]);
+    var params = data[:context][:extraParams];
+
+    if (entity != null && params != null) {
+      // What Home Assistant now reports - for datetime.* the UTC form of
+      // what was sent.
+      var state = DateTimeValue.reportedState(entity, params);
+
+      if (state != null) {
+        entity.setState(state);
+        storeEntities();
+        Ui.requestUpdate();
+      }
+    }
+
+    App.getApp().viewController.removeLoader();
+  }
+
+  // Sets a date/time entity to `fields` ([year, month, day, hour, minute],
+  // the watch's local time - see DateTimeValue), sending exactly the part
+  // the entity has.
+  (:fullmem)
+  function setDateTimeValue(entity, fields) {
+    var service = DateTimeValue.serviceName(entity);
+    var params = DateTimeValue.serviceParams(entity, fields);
+
+    // No connection: offer to send it over Wi-Fi/LTE (see WifiLte.mc).
+    if (WifiLte.shouldUse()) {
+      WifiLte.offerService(
+        entity,
+        service,
+        params,
+        "Setting " + entity.getRawName() + "\nto " + DateTimeValue.format(DateTimeValue.modeOf(entity), fields)
+      );
+      return;
+    }
+
+    App.getApp().viewController.showLoader("Setting");
+
+    client.callService(
+      entity.getServiceDomain(),
+      service,
+      entity.getId(),
+      params,
+      Utils.method(Hass, :onSetDateTimeValueCompleted)
+    );
+  }
+
   function toggleEntityState(entity) {
     var entityId = entity.getId();
     var currentState = entity.getState();
@@ -928,7 +993,7 @@ module Hass {
       // binary_sensor cannot be set, only read
       return;
     }
-    if (entity.getType() == Entity.TYPE_SELECT || entity.getType() == Entity.TYPE_INPUT_NUMBER) {
+    if (entity.getType() == Entity.TYPE_SELECT || entity.getType() == Entity.TYPE_INPUT_NUMBER || entity.getType() == TYPE_DATETIME) {
       // handled via a dedicated menu / edit view, not a simple toggle
       return;
     }

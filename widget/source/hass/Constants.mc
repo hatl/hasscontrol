@@ -30,7 +30,11 @@ module Hass {
         TYPE_SENSOR,
         TYPE_SELECT,
         TYPE_INPUT_NUMBER,
-        TYPE_UNKNOWN
+        TYPE_UNKNOWN,
+        // input_datetime, date, time and datetime (see
+        // Entity.detectExtendedType()). Last, after TYPE_UNKNOWN, so that no
+        // existing type changes its value.
+        TYPE_DATETIME
     }
 
     enum {

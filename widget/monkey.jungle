@@ -14,6 +14,8 @@ project.typecheck = 0
 #   * the mdi:* and device_class icon lookup tables  (~9.8 KB)
 #   * EntityListView, leaving the classic EntityCardView (~4.1 KB)
 #   * select/input_number editing (Menu2 picker, InputNumberEditView)
+#   * date/time editing (DateTimeEditView, DateTimeValue) - those entities
+#     are shown read-only, datetime.* in UTC
 #   * the lock confirmation and PIN entry (Lock/)
 #   * Wi-Fi/LTE execution (hass/WifiLte.mc) and the wait for the phone at
 #     launch (ConnectionWait.mc)

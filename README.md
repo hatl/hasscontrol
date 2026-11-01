@@ -72,6 +72,9 @@ Currently only following Home Assistant entities are supported:
  sensor        | Display values for the following sensor types: temperature, humidity, CO2, PM10, PM25, energy, gas and water (others will be displayed but won't have a proper icon).
  select / input_select | Pick one of the entity's configured options. See [Navigation & Controls](#navigation--controls) for how this works. Read-only on [low-memory devices](#low-memory-devices).
  input_number / number | Set a numeric value, honoring the entity's `min`/`max`/`step`. See [Navigation & Controls](#navigation--controls) for how this works. Read-only on [low-memory devices](#low-memory-devices).
+ input_datetime | Set a date, a time of day, or both - whichever the helper has. See [Navigation & Controls](#navigation--controls) for how this works. Read-only on [low-memory devices](#low-memory-devices).
+ date / time   | Set a date (`date`) or a time of day (`time`). See [Navigation & Controls](#navigation--controls) for how this works. Read-only on [low-memory devices](#low-memory-devices).
+ datetime      | Set a date and time, shown and entered in the watch's local time. See [Navigation & Controls](#navigation--controls) for how this works. Read-only, and shown in UTC, on [low-memory devices](#low-memory-devices).
 
 
 \* marked are not entities in the true sense of the word, but why have two tables
@@ -112,8 +115,9 @@ set stopped fitting, and the widget ran out of memory on these devices.
 
 To keep them working, HassControl is built with a reduced feature set for the watches
 listed below. Everything else — scenes, group sync, colored icons, battery reporting,
-header authentication — works exactly as documented, though `select`/`input_select` and
-`input_number`/`number` are read-only there (see below) rather than editable.
+header authentication — works exactly as documented, though `select`/`input_select`,
+`input_number`/`number` and the date/time entities (`input_datetime`, `date`, `time`,
+`datetime`) are read-only there (see below) rather than editable.
 
 | Affected watches |
 |------------------|
@@ -123,8 +127,9 @@ header authentication — works exactly as documented, though `select`/`input_se
 
 - **[Custom icons](#custom-icons) are not available.** Entities always use the icon for
   their type and state. The `icon:` and `device_class` attributes are ignored. `select`/
-  `input_select` and `input_number`/`number` also lose their own distinctive icon on these
-  watches, falling back to the same generic icon an unrecognized sensor gets.
+  `input_select`, `input_number`/`number` and the date/time entities also lose their own
+  distinctive icon on these watches, falling back to the same generic icon an unrecognized
+  sensor gets.
 - **Only the classic card view is available.** The 3-row list view is not built for these
   watches, so the `List View` entry is absent from the watch menu and the
   `Use list view style` setting in the ConnectIQ app has no effect. See [Display](#display).
@@ -132,6 +137,10 @@ header authentication — works exactly as documented, though `select`/`input_se
   display the entity's current option/value, the same way a plain sensor is displayed, but
   there's no menu or edit screen to change it - do that from Home Assistant or another
   device instead. See [Navigation & Controls](#navigation--controls).
+- **`input_datetime`, `date`, `time` and `datetime` are read-only too**, the same way. Their
+  value is shown as Home Assistant reports it, minus the seconds (`2026-11-01 13:30`,
+  `06:30`), always on the 24-hour clock - and a `datetime` in UTC rather than the watch's
+  local time.
 - **No [lock confirmation](#lock-confirmation).** Locks are locked and unlocked right away;
   the `Confirm before locking/unlocking a lock` and `Lock PIN` settings have no effect.
 - **No [waiting for the phone, Wi-Fi or LTE](#without-the-phone-waiting-wi-fi-and-lte).**
@@ -344,6 +353,7 @@ Entities can be displayed in two styles — a 3-row list (default) or the classi
 - **Refreshing entities**: If you have made changes to your entities in Home Assistant and want to update the widget, you can select the "Refresh entities" option in the widget menu. This will reload all entities from Home Assistant.
 - **Choosing a `select`/`input_select` option**: Select the entity and press the "Select" button. This opens a menu listing the entity's options — pick one to send it to Home Assistant. On [low-memory devices](#low-memory-devices) these entities are read-only instead: they just display the current option and pressing "Select" does nothing.
 - **Setting an `input_number`/`number` value**: Select the entity and press the "Select" button. This opens a dedicated screen with the current value in the middle and "+"/"-" bands at the top and bottom; use up/down (or tap/swipe those bands) to adjust the value by the entity's configured step, respecting its min/max, then press "Select" (or tap the value) to confirm, or "Back" to cancel. On [low-memory devices](#low-memory-devices) these entities are read-only instead: they just display the current value and pressing "Select" does nothing.
+- **Date and time** (`input_datetime`, `date`, `time`, `datetime`): Select the entity and press the "Select" button. A screen like the number one opens, with the date (`2026-11-01`) and/or the time (`14:30`, or `2:30 PM` with an AM/PM field of its own on the 12-hour clock) - whichever the entity has - and its first field highlighted. Up/down (or tap/swipe the bands) change the highlighted field - hold the button to repeat - and "Select" moves on to the next one; on the last field it sends the value. "Back" goes to the previous field, and on the first one leaves without sending anything. On a touchscreen, tap a field to highlight it, and tap it again for "Select". Fields wrap around, except the year (1970 to 2099), and the day follows the month: 31 January becomes 28 or 29 February. Seconds are always set to `00`. A `datetime` is shown and entered in the watch's local time, using the watch's current UTC offset - so a date on the other side of a daylight saving change comes out an hour off. On [low-memory devices](#low-memory-devices) these entities are read-only instead: they just display the current value and pressing "Select" does nothing.
 
 HassControl also supports the following controls:
 

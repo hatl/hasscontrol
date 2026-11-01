@@ -83,5 +83,10 @@
         <bitmap id="MdiWater" filename="mdi_water.png" automaticPalette="false" />
         <bitmap id="MdiFormatListBulleted" filename="mdi_format_list_bulleted.png" automaticPalette="false" />
         <bitmap id="MdiNumeric" filename="mdi_numeric.png" automaticPalette="false" />
+        <!-- Rendered at 60x60 from the Material Design Icons glyphs (the same
+             way mdi_format_list_bulleted.png is): the date/time entities' icons. -->
+        <bitmap id="MdiCalendar" filename="mdi_calendar.png" automaticPalette="false" />
+        <bitmap id="MdiClockOutline" filename="mdi_clock_outline.png" automaticPalette="false" />
+        <bitmap id="MdiCalendarClock" filename="mdi_calendar_clock.png" automaticPalette="false" />
     </drawables>
 </resources>

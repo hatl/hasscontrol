@@ -115,18 +115,22 @@ class EntityListDelegate extends Ui.BehaviorDelegate {
     return true;
   }
 
-  // Routes TYPE_SELECT/TYPE_INPUT_NUMBER to their dedicated menu/edit view,
-  // and TYPE_LOCK to its optional confirmation (LockConfirm.request()).
-  // Returns true when handled (caller should not also toggleEntity()).
+  // Routes TYPE_SELECT/TYPE_INPUT_NUMBER/TYPE_DATETIME to their dedicated
+  // menu/edit view, and TYPE_LOCK to its optional confirmation
+  // (LockConfirm.request()). Returns true when handled (caller should not
+  // also toggleEntity()). EntityCardView shares this delegate, so this
+  // covers both entity view styles.
   //
   // Split out (rather than inlined in toggleCurrentEntity() above) so the
   // (:lowmem) variant below never references InputNumberEditView,
-  // LockConfirm or PinEntryView - select/input_select/input_number/number
-  // are shown read-only on 64 KB widget devices (:lowmem, see monkey.jungle
-  // and Entity.mc), and locks are toggled there without a confirmation, so
-  // this is unreachable there, but the references still have to not exist
-  // for the linker to actually drop InputNumberEditView.mc's classes, the
-  // Lock/ code and the two new mdi bitmaps from that build.
+  // DateTimeEditView, LockConfirm or PinEntryView -
+  // select/input_select/input_number/number and the date/time entities are
+  // shown read-only on 64 KB widget devices (:lowmem, see monkey.jungle and
+  // Entity.mc), and locks are toggled there without a confirmation, so this
+  // is unreachable there, but the references still have to not exist for
+  // the linker to actually drop InputNumberEditView.mc's and
+  // DateTimeEditView.mc's classes, DateTimeValue and the Lock/ code from
+  // that build.
   (:fullmem)
   hidden function handleExtendedEntityTypes(entity) {
     if (entity.getType() == Hass.TYPE_SELECT) {
@@ -136,6 +140,11 @@ class EntityListDelegate extends Ui.BehaviorDelegate {
     if (entity.getType() == Hass.TYPE_INPUT_NUMBER) {
       var editView = new InputNumberEditView(entity);
       Ui.pushView(editView, new InputNumberEditDelegate(entity, editView), Ui.SLIDE_IMMEDIATE);
+      return true;
+    }
+    if (entity.getType() == Hass.TYPE_DATETIME) {
+      var dateTimeView = new DateTimeEditView(entity);
+      Ui.pushView(dateTimeView, new DateTimeEditDelegate(entity, dateTimeView), Ui.SLIDE_IMMEDIATE);
       return true;
     }
     // The optional yes/no question or PIN before a lock is locked/unlocked
@@ -273,7 +282,7 @@ class EntityListView extends Ui.View {
   hidden var _mController;
   hidden var _mLastIndex;
   hidden var _mShowBar;
-  hidden var _mIconCache; // entityId => { :drawable, :type, :state, :sensorClass, :icon, :deviceClass }
+  hidden var _mIconCache; // entityId => { :drawable, :type, :state, :sensorClass, :icon, :deviceClass, :mode }
 
   function initialize(controller) {
     View.initialize();
@@ -395,6 +404,8 @@ class EntityListView extends Ui.View {
       return WatchUi.loadResource(Rez.Drawables.MdiFormatListBulleted);
     } else if (type == Hass.TYPE_INPUT_NUMBER) {
       return WatchUi.loadResource(Rez.Drawables.MdiNumeric);
+    } else if (type == Hass.TYPE_DATETIME) {
+      return WatchUi.loadResource(EntityCardView.dateTimeIcon(entity));
     }
 
     return WatchUi.loadResource(Rez.Drawables.Unknown);
@@ -524,6 +535,10 @@ class EntityListView extends Ui.View {
       var sensorClass = entity.getSensorClass();
       var icon        = entity.getIcon();
       var deviceClass = entity.getDeviceClass();
+      // A date/time entity's icon follows its mode, which an
+      // input_datetime's state can change without its state changing
+      // (STATE_SENSOR either way) - e.g. from "unknown" to a date.
+      var mode        = type == Hass.TYPE_DATETIME ? DateTimeValue.modeOf(entity) : null;
       visibleIds[id]  = true;
 
       var cached = _mIconCache[id];
@@ -532,14 +547,16 @@ class EntityListView extends Ui.View {
           || cached[:state]       != state
           || cached[:sensorClass] != sensorClass
           || !strEq(cached[:icon], icon)
-          || !strEq(cached[:deviceClass], deviceClass)) {
+          || !strEq(cached[:deviceClass], deviceClass)
+          || cached[:mode]        != mode) {
         _mIconCache[id] = {
           :drawable    => getIconDrawable(entity),
           :type        => type,
           :state       => state,
           :sensorClass => sensorClass,
           :icon        => icon,
-          :deviceClass => deviceClass
+          :deviceClass => deviceClass,
+          :mode        => mode
         };
       }
     }

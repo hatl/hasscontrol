@@ -300,6 +300,11 @@ module Utils {
         "mdi:format-list-bulleted-type" => Rez.Drawables.MdiFormatListBulleted,
         "mdi:numeric" => Rez.Drawables.MdiNumeric,
         "mdi:counter" => Rez.Drawables.MdiNumeric,
+        "mdi:calendar" => Rez.Drawables.MdiCalendar,
+        "mdi:calendar-outline" => Rez.Drawables.MdiCalendar,
+        "mdi:clock-outline" => Rez.Drawables.MdiClockOutline,
+        "mdi:clock" => Rez.Drawables.MdiClockOutline,
+        "mdi:calendar-clock" => Rez.Drawables.MdiCalendarClock,
       };
     }
     return _mdiMap;

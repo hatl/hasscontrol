@@ -138,7 +138,8 @@ class ViewController {
         Hass.TYPE_INPUT_BUTTON,
         Hass.TYPE_SENSOR,
         Hass.TYPE_SELECT,
-        Hass.TYPE_INPUT_NUMBER
+        Hass.TYPE_INPUT_NUMBER,
+        Hass.TYPE_DATETIME
       ]
     );
   }
@@ -162,7 +163,8 @@ class ViewController {
         Hass.TYPE_INPUT_BUTTON,
         Hass.TYPE_SENSOR,
         Hass.TYPE_SELECT,
-        Hass.TYPE_INPUT_NUMBER
+        Hass.TYPE_INPUT_NUMBER,
+        Hass.TYPE_DATETIME
       ]
     );
   }

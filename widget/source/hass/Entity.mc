@@ -248,7 +248,8 @@ module Hass {
     // min/max/step/service domain - editing-only data, needed for the
     // Menu2 option picker and InputNumberEditView screen, both
     // (:fullmem)-only (see monkey.jungle). 64 KB widget devices display
-    // these entities read-only, so none of this exists there.
+    // these entities read-only, so none of this exists there. The date/time
+    // entities (DateTimeEditView) only need the service domain.
     (:fullmem)
     hidden var _mOptions;
     (:fullmem)
@@ -328,6 +329,14 @@ module Hass {
     // wrong domain with a 200 but silently ignores it) just depends on
     // whether the id itself starts with "input_" - a fixed-literal check
     // rather than slicing a new String out of id.
+    //
+    // input_datetime/date/time/datetime (TYPE_DATETIME) work the same way:
+    // read-only on the 64 KB tier, edited in DateTimeEditView on :fullmem.
+    // Their checks are prefix tests (== 0), not substring ones: "time."
+    // occurs inside "input_datetime." and "datetime.", and "date." inside
+    // "update." (a domain of its own) - with input_datetime checked first.
+    // Whether one has a date, a time or both is derived when needed, never
+    // stored (DateTimeValue.modeOf()).
     (:fullmem)
     hidden function detectExtendedType(id) {
       if (id.find("select.") != null) {
@@ -337,6 +346,22 @@ module Hass {
       if (id.find("number.") != null) {
         _mServiceDomain = id.find("input_") == 0 ? "input_number" : "number";
         return TYPE_INPUT_NUMBER;
+      }
+      if (id.find("input_datetime.") == 0) {
+        _mServiceDomain = "input_datetime";
+        return TYPE_DATETIME;
+      }
+      if (id.find("datetime.") == 0) {
+        _mServiceDomain = "datetime";
+        return TYPE_DATETIME;
+      }
+      if (id.find("date.") == 0) {
+        _mServiceDomain = "date";
+        return TYPE_DATETIME;
+      }
+      if (id.find("time.") == 0) {
+        _mServiceDomain = "time";
+        return TYPE_DATETIME;
       }
       return TYPE_UNKNOWN;
     }
@@ -348,6 +373,14 @@ module Hass {
       }
       if (id.find("number.") != null) {
         return TYPE_INPUT_NUMBER;
+      }
+      if (
+        id.find("input_datetime.") == 0
+        || id.find("datetime.") == 0
+        || id.find("date.") == 0
+        || id.find("time.") == 0
+      ) {
+        return TYPE_DATETIME;
       }
       return TYPE_UNKNOWN;
     }
@@ -370,7 +403,7 @@ module Hass {
 
     function getName() {
       if (_mState == STATE_SENSOR) {
-        return _mName + "\n" + _mSensorValue;
+        return _mName + "\n" + getDisplayValue();
       }
       else {
         return _mName;
@@ -391,7 +424,7 @@ module Hass {
 
     function setState(newState) {
       if (newState instanceof String) {
-        if (_mType == TYPE_SENSOR || _mType == TYPE_SELECT || _mType == TYPE_INPUT_NUMBER) {
+        if (_mType == TYPE_SENSOR || _mType == TYPE_SELECT || _mType == TYPE_INPUT_NUMBER || _mType == TYPE_DATETIME) {
           _mState = STATE_SENSOR;
           _mSensorValue = newState;
         } else {
@@ -428,6 +461,44 @@ module Hass {
 
     function getSensorValue() {
       return _mSensorValue;
+    }
+
+    // The sensor value as the list and the card show it. A date/time
+    // entity's state becomes text for people: "2026-11-01", "14:30" (or
+    // "2:30 PM" on a 12-hour watch) or "2026-11-01 14:30", datetime.* in the
+    // watch's local time - see DateTimeValue.displayText(). Any other value
+    // is shown unchanged.
+    (:fullmem)
+    function getDisplayValue() {
+      if (_mType == TYPE_DATETIME && _mSensorValue != null) {
+        return DateTimeValue.displayText(self);
+      }
+      return _mSensorValue;
+    }
+
+    // The 64 KB tier keeps it small: a date/time entity's state with the
+    // seconds (and with them any "+00:00") dropped and the "T" replaced by
+    // a space - "2026-11-01T13:30:00+00:00" -> "2026-11-01 13:30",
+    // "2026-12-24 18:00:00" -> "2026-12-24 18:00", "06:30:00" -> "06:30".
+    // No time zone conversion, so datetime.* entities show in UTC there,
+    // and no 12-hour clock. A state without a time ("2026-07-01",
+    // "unknown") is shown as it is.
+    (:lowmem)
+    function getDisplayValue() {
+      var text = _mSensorValue;
+
+      if (_mType == TYPE_DATETIME && text != null) {
+        var colon = text.find(":");
+
+        if (colon != null && text.length() >= colon + 3) {
+          // A date comes first where the time's colon is past it.
+          text = colon > 10
+            ? text.substring(0, 10) + " " + text.substring(11, colon + 3)
+            : text.substring(0, colon + 3);
+        }
+      }
+
+      return text;
     }
 
     function getSensorClass() {
