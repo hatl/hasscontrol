@@ -40,7 +40,11 @@ import numpy as np
 from Xlib import X, display as xdisplay, XK
 from Xlib.ext import xtest
 
-S = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+HERE = os.path.dirname(os.path.abspath(__file__))
+# Everything a run produces - results, builds, mock logs, the Xwayland log - goes under one work
+# directory next to these sources (gitignored); CIQ_WORK moves it elsewhere.  S is the older name.
+WORK = os.environ.get("CIQ_WORK") or os.path.join(HERE, "work")
+S = WORK
 SDK = os.environ.get("CIQ_SDK") or open(os.path.expanduser("~/.Garmin/ConnectIQ/current-sdk.cfg")).read().strip()
 DISPLAY = os.environ.get("CIQ_DISPLAY", ":5")
 APPS = "/tmp/com.garmin.connectiq/GARMIN/APPS"
@@ -49,7 +53,7 @@ INI = os.path.expanduser("~/.Garmin/ConnectIQ/simulator.ini")
 DEVICES = os.path.expanduser("~/.Garmin/ConnectIQ/Devices")
 # Where the .prg builds are taken from; CIQ_VARIANTS points a run at another set of builds (one directory
 # per source revision), without the scenarios having to know.
-VARIANTS = os.environ.get("CIQ_VARIANTS") or S + "/variants2"
+VARIANTS = os.environ.get("CIQ_VARIANTS") or os.path.join(WORK, "variants2")
 MOCK_HTTP = "http://127.0.0.1:8123"
 MOCK_HTTPS = "https://127.0.0.1:8124"
 MENUBAR_X = {"File": 18, "Settings": 72, "Simulation": 147, "Data Fields": 231, "adb Connection": 330, "Help": 411}
@@ -61,6 +65,30 @@ APP_NAME = "APP"        # every variant is pushed as APP.prg -> MEDIA/APP.PRG, S
 def log(msg):
     sys.stderr.write(time.strftime("%H:%M:%S ") + msg + "\n")
     sys.stderr.flush()
+
+
+def ensure_display(geometry="1400x1000"):
+    """Start the private rootful Xwayland display if nothing serves it yet.  It is left running (a
+    cold start of the simulator is slow enough already); display.sh stops it.  Returns True when it
+    was started here."""
+    try:
+        xdisplay.Display(DISPLAY).close()
+        return False
+    except Exception:
+        pass
+    log(f"starting Xwayland {DISPLAY}")
+    os.makedirs(WORK, exist_ok=True)
+    out = open(os.path.join(WORK, "xwayland.log"), "ab")
+    subprocess.Popen(["Xwayland", DISPLAY, "-geometry", geometry, "-noreset"], stdout=out, stderr=out,
+                     stdin=subprocess.DEVNULL, start_new_session=True)
+    end = time.time() + 15
+    while time.time() < end:
+        try:
+            xdisplay.Display(DISPLAY).close()
+            return True
+        except Exception:
+            time.sleep(0.25)
+    raise RuntimeError(f"Xwayland {DISPLAY} did not come up (see {WORK}/xwayland.log)")
 
 
 class Device:
@@ -92,7 +120,7 @@ class Device:
 
 
 class Mock:
-    """Control the mock Home Assistant (scripts/mock_ha.py)."""
+    """Control the mock Home Assistant (mock_ha.py, started by mocks.sh)."""
 
     def __init__(self, base=MOCK_HTTP):
         self.base = base
@@ -145,9 +173,12 @@ class Mock:
 
 
 class Sim:
-    def __init__(self, device, log_dir=None):
+    def __init__(self, device, log_dir=None, attached=False):
         self.dev = Device(device)
         self.device = device
+        # attached: the simulator is started on the user's own desktop for them to use (live.py), not
+        # on the private X display - nothing here may then look for its window or click on it.
+        self.attached = attached
         self.log_dir = log_dir or os.path.join(S, "results", time.strftime("%H%M%S"))
         os.makedirs(self.log_dir, exist_ok=True)
         self.shot_count = 0
@@ -204,6 +235,8 @@ class Sim:
         return None
 
     def window_title(self):
+        if self.attached:
+            return None
         w = self.window(refresh=True)
         if not w:
             return None
@@ -841,9 +874,11 @@ class Sim:
             log("the simulator rewrote its settings; writing them again")
         os.makedirs(self.log_dir, exist_ok=True)
         env = dict(os.environ)
-        env.pop("WAYLAND_DISPLAY", None)
-        env["DISPLAY"] = DISPLAY
-        env["GDK_BACKEND"] = "x11"
+        if not self.attached:
+            ensure_display()
+            env.pop("WAYLAND_DISPLAY", None)
+            env["DISPLAY"] = DISPLAY
+            env["GDK_BACKEND"] = "x11"
         simlog = open(os.path.join(self.log_dir, "simulator.log"), "ab")
         self._pid = None
         proc = subprocess.Popen([os.path.join(SDK, "bin", "simulator")], env=env, stdout=simlog,
@@ -860,7 +895,7 @@ class Sim:
             if proc.poll() is not None:
                 log(f"the simulator exited immediately (status {proc.returncode})")
                 break
-            if self._port_listening() and self.window(refresh=True):
+            if self._port_listening() and (self.attached or self.window(refresh=True)):
                 break
             time.sleep(0.5)
         else:
@@ -877,10 +912,14 @@ class Sim:
         log(f"simulator up: {self.window_title()}")
         return self
 
-    @staticmethod
-    def _port_listening():
-        out = subprocess.run(["ss", "-ltn"], capture_output=True, text=True).stdout
-        return ":1234" in out
+    def _port_listening(self):
+        """Is port 1234 open - by the simulator this object started, when it knows its pid?  A listener
+        of another process is a leftover, never ours."""
+        out = subprocess.run(["ss", "-ltnp"], capture_output=True, text=True).stdout
+        for ln in out.splitlines()[1:]:
+            if ":1234" in ln and (self._pid is None or f"pid={self._pid}," in ln):
+                return True
+        return False
 
     @staticmethod
     def _simulator_pids():
@@ -922,18 +961,38 @@ class Sim:
         self._wait_port_free()
 
     @staticmethod
-    def _port_busy():
-        """Any socket on 1234, in any state - a lingering one makes the next simulator fail to bind
-        and hang with an empty window, which is why stop() waits for it to disappear."""
-        out = subprocess.run(["ss", "-tan"], capture_output=True, text=True).stdout
-        return any(":1234" in ln for ln in out.splitlines()[1:])
+    def _port_holders():
+        """Sockets on 1234 in any state, as (state, pid-or-None) - a lingering one makes the next
+        simulator fail to bind and hang with an empty window, which is why stop() waits for them."""
+        out = subprocess.run(["ss", "-tanp"], capture_output=True, text=True).stdout
+        found = []
+        for ln in out.splitlines()[1:]:
+            if ":1234" not in ln:
+                continue
+            m = re.search(r"pid=(\d+)", ln)
+            found.append((ln.split()[0], int(m.group(1)) if m else None))
+        return found
 
     def _wait_port_free(self, timeout=30):
+        """Wait for port 1234 to be free.  Whatever still holds it halfway through is killed: that is a
+        monkeydo left behind by an interrupted run, or a simulator of an earlier session - and only
+        one simulator can exist anyway."""
         end = time.time() + timeout
+        killed = False
         while time.time() < end:
-            if not self._port_busy():
+            holders = self._port_holders()
+            if not holders:
                 time.sleep(1.0)
                 return True
+            if not killed and time.time() > end - timeout / 2:
+                for _, pid in holders:
+                    if pid and pid != os.getpid():
+                        log(f"killing pid {pid}, which still holds port 1234")
+                        try:
+                            os.kill(pid, signal.SIGKILL)
+                        except ProcessLookupError:
+                            pass
+                killed = True
             time.sleep(0.5)
         log("warning: port 1234 still busy after stop()")
         return False
@@ -950,8 +1009,15 @@ class Sim:
             except subprocess.TimeoutExpired:
                 os.killpg(self.monkeydo.pid, signal.SIGKILL)
         self.monkeydo = None
-        # leftovers from other runs
-        subprocess.run([os.path.join(S, "scripts", "killmonkeydo.sh")], capture_output=True)
+        # leftovers from other runs (matched on the Java class, which no shell that calls this carries)
+        out = subprocess.run(["ps", "-eo", "pid,args"], capture_output=True, text=True).stdout
+        for line in out.splitlines()[1:]:
+            pid, _, args = line.strip().partition(" ")
+            if "garmin.monkeybrains.monkeydodeux" in args and pid.isdigit() and int(pid) != os.getpid():
+                try:
+                    os.kill(int(pid), signal.SIGINT)
+                except ProcessLookupError:
+                    pass
 
     def app_files(self):
         return {"prg": os.path.join(APPS, "MEDIA", APP_NAME + ".PRG"),

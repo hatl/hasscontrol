@@ -8,54 +8,78 @@ the compiler cannot see: the sync-mode crash, the truncated Wi-Fi/LTE question, 
 question hiding the value, the sensor-style values that were not persisted, and Back on the launch
 wait closing the widget.
 
-## Layout
+## Setup
 
-The scripts expect a work directory with `harness/` (the Python), `scripts/` (the shell scripts and
-the mock), `variants2/` (built `.prg` files) and `venv/` side by side; this folder is a flat copy of
-`harness/` and `scripts/`. Set one up with:
+Everything runs from this folder; nothing has to be copied anywhere. [uv](https://docs.astral.sh/uv/)
+manages the Python environment (`pyproject.toml`: python-xlib, pillow, numpy; `uv run` creates
+`.venv/` on first use). Besides uv the system needs `tesseract`, ImageMagick's `import`, `Xwayland`,
+`ss`, `openssl`, and a Connect IQ SDK (the one in `~/.Garmin/ConnectIQ/current-sdk.cfg`, or
+`CIQ_SDK`) with the developer key at `~/Programme/connectiq-sdk-manager/developer_key` (or `CIQ_KEY`).
 
-```sh
-mkdir -p ~/simtest/{harness,scripts,variants2} && cd ~/simtest
-cp /path/to/widget/tools/simtest/*.py harness/ && cp /path/to/widget/tools/simtest/*.sh /path/to/widget/tools/simtest/mock_ha.py scripts/
-python3 -m venv --system-site-packages venv && venv/bin/pip install python-xlib   # pillow, numpy from the system
-```
+Everything a run produces goes under `work/` (gitignored; `CIQ_WORK` moves it): `work/variants2/`
+holds the builds, `work/results/` the reports, `work/mock/` the mock servers' logs and their
+self-signed certificate, `work/live/` the exploratory sessions. The mock servers and the private
+X display are started on demand and left running; stop them with `./mocks.sh stop` and
+`./display.sh stop`.
 
-The system needs `tesseract`, ImageMagick's `import`, `Xwayland`, `ss`, and a Connect IQ SDK (the
-one in `~/.Garmin/ConnectIQ/current-sdk.cfg`) with the developer key at
-`~/Programme/connectiq-sdk-manager/developer_key` (or `CIQ_KEY`).
-
-## Running
+## Exploratory testing by hand
 
 ```sh
-scripts/mocks.sh start                        # mock Home Assistant on 8123 (http) and 8124 (https)
-Xwayland :5 -geometry 1400x1000 -noreset &    # a display of its own, so your desktop is left alone
-SRC=/path/to/widget scripts/build-variants2.sh   # settings variants for the old suite -> variants2/
-SRC=/path/to/widget scripts/build-dt-variants.sh # the date/time variants
-scripts/runall.sh                             # every device, one process per device
-scripts/rundt.sh                              # only the date/time scenarios
-scripts/retry-failures.sh f7_lock_pin_ok      # named scenarios, one process each
-venv/bin/python harness/run.py fenix7x        # one device in one process (less robust, see below)
+uv run live.py                                  # fenix7x
+uv run live.py venusq2 lockConfirmation=2 lockPin=1234
 ```
 
-`run.py` writes `results/<scenario>/REPORT.md` with the checks, the screenshots, the app log and
-`run.log`, and a `results/SUMMARY.md` over the scenarios of that invocation. `CIQ_VARIANTS=<dir>`
-points a run at builds in another directory (`build-wt-variants.sh` builds the old-suite variants
-from any tree into one). `mkvariant.sh` copies the widget sources and overrides property defaults in
-`resources/properties.xml`; `build.sh` compiles one variant.
+`live.py` starts the mocks, builds the widget from this tree with host, token and group pointed at
+the mock (`group.all`, one entity of every supported type, date/time included; further `key=value`
+arguments override settings from `resources/properties.xml`), **deletes every app with its settings
+and storage from the simulator** (so stored settings of yours can never point the build at a real
+Home Assistant), opens the simulator on your desktop and pushes the build. Down selects the widget
+in the glance list, Enter opens it; the app's output streams to the terminal, Ctrl-C stops the app
+and the simulator and lists what the widget sent to the mock. A 64 KB device gets a release build
+against the TLS mock automatically. The mock's control endpoints (below) work meanwhile, e.g. to
+change a state behind the widget's back.
 
-`explore.py <device> <variant> <steps...>` is the same machinery without assertions: it walks the
-widget and dumps a screenshot, the OCR text, the app log and the mock traffic for every step. Use it
-to see what a screen actually looks like before writing a check against it.
+## Automated runs
 
-The mock (`mock_ha.py`) serves `group.garmin` (15 entities of every supported type) and
-`group.datetime` (six date/time entities), implements the services the widget calls, and has control
-endpoints under `/_test/`: `log`, `reset`, `state`, `set`, `fail` (make the next requests fail) and
-`delay` (seconds added to every API request, so a loader stays on screen). `Mock` in `ciqsim.py`
-wraps them.
+```sh
+./build-variants2.sh                 # settings variants for the older scenarios -> work/variants2/
+./build-dt-variants.sh               # the date/time variants
+./build-master.sh                    # master, for the settings-upgrade scenario
+./runall.sh                          # every device, one process per device
+./rundt.sh [device ...]              # only the date/time scenarios
+./retry-failures.sh f7_lock_pin_ok   # named scenarios, one process each
+uv run run.py fenix7x                # one device in one process (less robust, see below)
+uv run run.py f7_lock_pin_ok         # or scenarios by name or by feature
+```
+
+`run.py` writes `work/results/<scenario>/REPORT.md` with the checks, the screenshots, the app log
+and `run.log`, and `work/results/SUMMARY.md` over the scenarios of that invocation (the shell
+wrappers keep a copy per device). `CIQ_VARIANTS=<dir>` points a run at builds in another directory
+(`SRC=<widget dir> OUT=<dir> ./build-wt-variants.sh` builds the older scenarios' variants from any
+tree into one, for comparing revisions). `mkvariant.sh` copies the widget sources and overrides
+property defaults in `resources/properties.xml`; `build.sh` compiles one variant; `cleanup.sh` stops
+stray runners, simulators and monkeydo processes.
+
+`uv run explore.py <device> <variant> <steps...>` is the automated machinery without assertions: it
+walks the widget on the private display and dumps a screenshot, the OCR text, the app log and the
+mock traffic for every step. Use it to see what a screen actually looks like before writing a check
+against it.
+
+The mock (`mock_ha.py`) serves `group.garmin` (15 entities of every supported type), `group.datetime`
+(six date/time entities) and `group.all` (both, plus `number`, `select` and `input_button`),
+implements the services the widget calls, and has control endpoints under `/_test/`: `log`,
+`reset`, `state`, `set`, `fail` (make the next requests fail) and `delay` (seconds added to every API
+request, so a loader stays on screen). `Mock` in `ciqsim.py` wraps them:
+
+```sh
+curl -s -X POST localhost:8123/_test/set -d '{"entity_id":"light.kitchen","state":"off"}'
+curl -s localhost:8123/_test/log | python3 -m json.tool
+```
 
 ## How it works, and what bites
 
-The simulator runs on a private rootful Xwayland display, so the tests never touch the real desktop.
+The automated runs put the simulator on a private rootful Xwayland display (`:5`, `CIQ_DISPLAY`; started
+by the harness when missing), so the tests never touch the real desktop.
 Everything below was learned the hard way; `ciqsim.py` carries the same notes at each method.
 
 - **Keyboard arrows and Enter do not reach the app, but Escape does - as the BACK button.** Device
@@ -66,7 +90,8 @@ Everything below was learned the hard way; `ciqsim.py` carries the same notes at
   matches the bezel against the device PNG. Assuming it is centred puts the Enter press just outside
   its button, and the launch then fails silently.
 - **Restarting the simulator races its own port.** Wait until nothing holds TCP 1234 in any state
-  before starting a new one, or it never binds and hangs with an empty window. A simulator that
+  before starting a new one, or it never binds and hangs with an empty window (whatever still holds
+  it after a while - a monkeydo left over from an interrupted run - is killed). A simulator that
   inherits a `simulator.ini` with duplicate keys hangs behind a modal warning instead: the harness
   writes that file atomically and only while no simulator runs. Keys worth knowing: `BleState` and
   `WifiState` (0 not initialised, 1 not connected, 2 connected), `TimeSetting` (the simulator

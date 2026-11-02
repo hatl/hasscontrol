@@ -1,13 +1,17 @@
 #!/usr/bin/env bash
-# Re-run named scenarios one per process, with a clean slate before each.
-S=$(cd "$(dirname "$0")/.." && pwd)
+# Re-run named scenarios one per process, with a clean slate before each.  run.py's full output
+# stays next to the report (work/results/<name>/run.log) for triage.  A scenario that runs first in
+# its process is spared run.py's between-scenario Settings-menu click that puts the phone back on.
+# usage: retry-failures.sh <scenario> [scenario ...]
+set -u
+HERE=$(cd "$(dirname "$0")" && pwd)
+WORK=${CIQ_WORK:-$HERE/work}
 for name in "$@"; do
-  "$S/scripts/cleanup.sh" > /dev/null 2>&1
+  "$HERE/cleanup.sh" > /dev/null 2>&1
   sleep 3
-  mkdir -p "$S/results/$name"
-  # the full output stays next to the report, for triage
-  timeout 900 "$S/venv/bin/python" "$S/harness/run.py" "$name" > "$S/results/$name/run.log" 2>&1
-  grep -E 'report .*(PASS|FAIL)|ERROR in' "$S/results/$name/run.log" | sed 's|.*/results/||'
+  rm -rf "$WORK/results/$name"; mkdir -p "$WORK/results/$name"
+  timeout 900 uv run --project "$HERE" "$HERE/run.py" "$name" > "$WORK/results/$name/run.log" 2>&1
+  echo "$name: $(grep -m1 -o 'Result: [^*]*' "$WORK/results/$name/REPORT.md" 2>/dev/null || echo 'no report')"
 done
-"$S/scripts/cleanup.sh" > /dev/null 2>&1
+"$HERE/cleanup.sh" > /dev/null 2>&1
 echo "===== retries done ====="

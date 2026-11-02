@@ -20,8 +20,9 @@ Control endpoints (no auth):
                           /_test/reset clears it too) - keeps a loader on screen
 Every log entry also carries the HTTP "status" the mock answered with.
 
-Groups: group.garmin (the original fixture - its order is what the older scenarios navigate by) and
-group.datetime (time.lunch, date.deadline, datetime.launch, input_datetime.alarm/.vacation/.event).
+Groups: group.garmin (the original fixture - its order is what the older scenarios navigate by),
+group.datetime (time.lunch, date.deadline, datetime.launch, input_datetime.alarm/.vacation/.event) and
+group.all (both, plus number/select/input_button - every supported type, for exploratory sessions).
 
 Date and time services, validated the way Home Assistant validates them (400 on bad service data):
   time.set_value {"time"}, date.set_value {"date"}, datetime.set_value {"datetime"} (stored exactly as sent),
@@ -146,6 +147,18 @@ FIXTURE = {
     "input_datetime.alarm": _input_datetime("Alarm", "06:30:00", has_date=False, has_time=True),
     "input_datetime.vacation": _input_datetime("Vacation", "2026-07-01", has_date=True, has_time=False),
     "input_datetime.event": _input_datetime("Event", "2026-12-24 18:00:00", has_date=True, has_time=True),
+    # Every entity type the widget supports in one group, for exploratory sessions (live.py): the two
+    # groups above plus the domains they lack (input_button, select, number).
+    "group.all": {"state": "on", "attributes": {"friendly_name": "Everything", "entity_id": [
+        "lock.front_door", "cover.garage", "light.kitchen", "switch.tv", "scene.movie", "script.goodnight",
+        "input_number.volume", "number.brightness", "input_select.mode", "select.scene_mode",
+        "sensor.temperature", "binary_sensor.door", "button.restart", "input_button.ring",
+        "automation.lights", "fan.bedroom", "valve.water", "input_boolean.guest",
+        "time.lunch", "date.deadline", "datetime.launch", "input_datetime.alarm", "input_datetime.vacation",
+        "input_datetime.event"]}},
+    "number.brightness": {"state": "75.0", "attributes": {"friendly_name": "Brightness", "min": 0, "max": 255, "step": 1, "mode": "auto"}},
+    "select.scene_mode": {"state": "Relax", "attributes": {"friendly_name": "Scene mode", "options": ["Relax", "Focus", "Party"]}},
+    "input_button.ring": {"state": "2026-01-01T00:00:00+00:00", "attributes": {"friendly_name": "Ring"}},
 }
 
 class Store:

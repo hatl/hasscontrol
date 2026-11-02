@@ -35,7 +35,7 @@ from PIL import Image
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from ciqsim import Sim, Mock, Report, MOCK_HTTP, MOCK_HTTPS, S, VARIANTS, log
 
-MASTER_PRG = S + "/out/master-fenix7x-debug.prg"
+MASTER_PRG = os.path.join(S, "out", "master-fenix7x-debug.prg")   # built by build-master.sh
 
 # Entities of the mock, in group order - the widget shows them in this order, so `index` below is how
 # many "down" presses reach an entity from the first one.
@@ -842,7 +842,7 @@ def va3_entities_and_timers(sim, rep):
 #  * No phone and Wi-Fi/LTE execution on: confirming asks "Wi-Fi/LTE? / Setting <name> to <value>" first.
 #  * 64 KB devices show the value read-only; selecting it does nothing.
 #
-# Builds: dt-<device>.prg and dtwifi-fenix7x.prg from scripts/build-dt-variants.sh (group=datetime).
+# Builds: dt-<device>.prg and dtwifi-fenix7x.prg from build-dt-variants.sh (group=datetime).
 # The mock's group.datetime, in group order - the index is how many next_page() reach an entity:
 DT_ENTITIES = ["time.lunch", "date.deadline", "datetime.launch", "input_datetime.alarm",
                "input_datetime.vacation", "input_datetime.event"]
@@ -881,7 +881,7 @@ def dt_fresh(sim, mock, variant="dt", clock="24"):
     from ciqsim import LOWMEM
     prg = f"{VARIANTS}/{variant}-{sim.device}.prg"
     if not os.path.exists(prg):
-        raise FileNotFoundError(f"{prg} is missing - build it with scripts/build-dt-variants.sh")
+        raise FileNotFoundError(f"{prg} is missing - build it with build-dt-variants.sh")
     if sim.device not in LOWMEM:
         ensure_clock(sim, clock)
     return fresh(sim, mock, variant)

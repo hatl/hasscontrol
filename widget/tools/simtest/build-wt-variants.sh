@@ -7,8 +7,9 @@
 # usage: SRC=<widget dir> OUT=<dir> [FULL="fenix7x"] [LOW="instinct2x"] build-wt-variants.sh [variant ...]
 # Results are appended to <OUT>/BUILD-WT-RESULTS.txt, so several invocations into one OUT add up.
 set -u
-S=$(cd "$(dirname "$0")/.." && pwd)
-SRC=${SRC:-$S/wt-dt/widget}
+HERE=$(cd "$(dirname "$0")" && pwd)
+WORK=${CIQ_WORK:-$HERE/work}
+SRC=${SRC:?set SRC to the widget directory to build from}
 OUT=${OUT:?set OUT to the directory to build into}; mkdir -p "$OUT"
 FULL=${FULL:-fenix7x}
 LOW=${LOW:-instinct2x}
@@ -22,7 +23,7 @@ WANT=${*:-base lockyn closeauto wifi}
 build() {   # build <variant-dir> <name> <device> <debug|release>
   local out="$OUT/$2-$3.prg" log
   rm -f "$out"
-  log=$("$S/scripts/build.sh" "$1" "$3" "$out" "$4")
+  log=$("$HERE/build.sh" "$1" "$3" "$out" "$4")
   if [ -f "$out" ]; then echo "OK   $2 $3 $4"; else echo "FAIL $2 $3 $4"; echo "$log" | grep -iE 'error' | head -5; fi
 }
 
@@ -32,10 +33,10 @@ for name in $WANT; do
   read -r -a extra <<< "${V[$name]}"
   host=http://127.0.0.1:8123
   [ "$name" = wifi ] && host=https://127.0.0.1:8124      # Wi-Fi/LTE refuses plain http
-  "$S/scripts/mkvariant.sh" "$SRC" "$OUT/tw-$name" host=$host accessToken=TESTTOKEN group=garmin "${extra[@]}" > /dev/null || echo "FAIL mkvariant tw-$name"
+  "$HERE/mkvariant.sh" "$SRC" "$OUT/tw-$name" host=$host accessToken=TESTTOKEN group=garmin "${extra[@]}" > /dev/null || echo "FAIL mkvariant tw-$name"
   for dev in $FULL; do build "$OUT/tw-$name" "$name" "$dev" debug; done
   if [ "$name" = base ]; then
-    "$S/scripts/mkvariant.sh" "$SRC" "$OUT/tl-$name" host=https://127.0.0.1:8124 accessToken=TESTTOKEN group=garmin > /dev/null || echo "FAIL mkvariant tl-$name"
+    "$HERE/mkvariant.sh" "$SRC" "$OUT/tl-$name" host=https://127.0.0.1:8124 accessToken=TESTTOKEN group=garmin > /dev/null || echo "FAIL mkvariant tl-$name"
     for dev in $LOW; do build "$OUT/tl-$name" "$name" "$dev" release; done
   fi
 done

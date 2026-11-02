@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # usage: mkvariant.sh <src-widget-dir> <dst-dir> key=value [key=value ...]
-# Copies the widget sources and overrides property defaults in resources/properties.xml.
+# Copies the widget sources (without bin/, sdk/, export/ and tools/ - the work directory of these
+# scripts lives under tools/, and copying it along would copy every earlier variant again) and
+# overrides property defaults in resources/properties.xml.
 set -eu
 SRC="$1"; DST="$2"; shift 2
 rm -rf "$DST"; mkdir -p "$DST"
-cp -r "$SRC"/. "$DST"/
-rm -rf "$DST/bin" "$DST/sdk" "$DST/export"
+tar -C "$SRC" --exclude=./bin --exclude=./sdk --exclude=./export --exclude=./tools --exclude=./.git -cf - . | tar -C "$DST" -xf -
 for kv in "$@"; do
   k="${kv%%=*}"; v="${kv#*=}"
   python3 - "$DST/resources/properties.xml" "$k" "$v" <<'PY'

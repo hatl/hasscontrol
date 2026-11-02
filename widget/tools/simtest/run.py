@@ -5,8 +5,8 @@
     run.py fenix7x instinct2x   only those devices
     run.py f7_lock_pin_ok       one scenario by name
 
-Results land in <scratchpad>/results/<scenario>/ (REPORT.md, screenshots, app log) and a summary in
-<scratchpad>/results/SUMMARY.md.
+Results land in work/results/<scenario>/ (REPORT.md, screenshots, app log) and a summary in
+work/results/SUMMARY.md.  Run it with `uv run run.py ...` from this folder (see README.md).
 """
 import os
 import sys
