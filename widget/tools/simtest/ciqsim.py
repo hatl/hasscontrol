@@ -933,7 +933,9 @@ class Sim:
                 pids.append(f[0])
         return pids
 
-    def stop(self):
+    def stop(self, wait_port=True):
+        """Stop monkeydo and every simulator.  wait_port: block until port 1234 is free again, which
+        the next start() needs - a session that is ending anyway (live.py) skips the wait."""
         self._stop_monkeydo()
         pids = self._simulator_pids()
         for p in pids:
@@ -958,7 +960,8 @@ class Sim:
             except Exception:
                 pass
             self._x = None
-        self._wait_port_free()
+        if wait_port:
+            self._wait_port_free()
 
     @staticmethod
     def _port_holders():

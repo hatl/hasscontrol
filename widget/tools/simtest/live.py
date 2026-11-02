@@ -109,6 +109,9 @@ def main():
                 if chunk:
                     sys.stdout.write(chunk.decode(errors="replace"))
                     sys.stdout.flush()
+                elif sim._proc.poll() is not None:
+                    log("the simulator was closed")
+                    break
                 elif sim.monkeydo and sim.monkeydo.poll() is not None:
                     log("monkeydo ended (the app was closed or the simulator went away)")
                     break
@@ -129,7 +132,7 @@ def main():
             sim._stop_monkeydo()
             log("simulator left running")
         else:
-            sim.stop()
+            sim.stop(wait_port=False)
     return 0
 
 
