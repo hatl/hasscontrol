@@ -60,8 +60,10 @@ def main():
                     sim.shot_count = 0
                     # Scenarios must not inherit the connection state of the one before: a Wi-Fi
                     # scenario leaves the phone disconnected, and the next one then silently fails
-                    # to fetch anything.
-                    sim.set_ble("Connected")
+                    # to fetch anything.  Only when it is not known to be connected already: every
+                    # trip through the simulator's Settings menu risks its GTK crash (see Sim.ble_state).
+                    if sim.ble_state != "Connected":
+                        sim.set_ble("Connected")
                 rep = Report(name, sim)
                 rep.lines.insert(1, f"_{device} · {sc['feature']}_")
                 rep.lines.insert(2, "")

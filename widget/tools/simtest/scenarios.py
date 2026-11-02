@@ -21,10 +21,16 @@ the only way to reach the PIN digit wheel):
     instinct2x   64 KB (:lowmem), semi-octagon, sub-screen, CIQ 3.4.3       -> timer fix only
     vivoactive3  64 KB (:lowmem), round, touch, single button, CIQ 3.1.6    -> oldest Connect IQ
 """
+import datetime as _dt
+import io
 import os
 import re
+import subprocess
 import sys
 import time
+
+import numpy as np
+from PIL import Image
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from ciqsim import Sim, Mock, Report, MOCK_HTTP, MOCK_HTTPS, S, VARIANTS, log
@@ -49,6 +55,21 @@ def scenario(device, name, feature):
 
 
 # ---------------------------------------------------------------------------- helpers
+def no_app(img):
+    """The simulator's "no app running" screen: a blue triangle in the middle of the display."""
+    a = np.asarray(img.convert("RGB")).astype(int)
+    h, w = a.shape[:2]
+    centre = a[int(h * 0.4):int(h * 0.6), int(w * 0.4):int(w * 0.6)].reshape(-1, 3)
+    return float(((centre[:, 2] > 150) & (centre[:, 0] < 80)).mean()) > 0.3
+
+
+def snap(sim, rep, label):
+    """A screenshot saved into the report, returned as an image for checks made afterwards."""
+    path, img = sim.shot(label)
+    rep.lines.append(f"  - ![{label}]({os.path.basename(path)})")
+    return img
+
+
 def select_entity(sim, index):
     """Move from the first entity to `index` and select it, whatever controls the device has."""
     for _ in range(index):
@@ -372,6 +393,38 @@ def f7_connection_wait(sim, rep):
     rep.shot("after-reconnect")
     ok, txt = sim.wait_text(r"front\s*door", timeout=10)
     rep.check(ok, "the loader is gone and the entity is shown", repr(txt))
+
+
+@scenario("fenix7x", "f7_wait_back_to_stored", "waiting for the phone")
+def f7_wait_back_to_stored(sim, rep):
+    """Back on "Waiting for connection" leaves the loader for the stored entities, and the wait goes on
+    quietly (ConnectionWait's own description).  Imported with the phone, launched again without it
+    (storage kept), one back: the widget must stay open on the stored entity.
+
+    Found with f7_dt_offline_mode: on every build tried, including the main tree's, the widget closed
+    instead - the loader is a native Ui.ProgressBar, so presumably the system pops it on back and
+    ConnectionWait.dismiss() pops once more, taking the entity view along."""
+    m = sim.mock_http
+    m.reset()
+    sim.push(f"{VARIANTS}/base-{sim.device}.prg")
+    sim.launch()
+    rep.check(wait_entities(sim, m), "the entities were imported with the phone connected")
+    time.sleep(3)                         # stored after the last response
+    sim.set_ble("Not Connected")
+    since = time.time()
+    sim.push(f"{VARIANTS}/base-{sim.device}.prg", fresh_settings=True, fresh_storage=False)
+    sim.launch()
+    ok, txt = sim.wait_text(r"wa\w*it|con+e\w*ion", timeout=12)
+    rep.check(ok, "without the phone, 'Waiting for connection' is shown", repr(txt))
+    rep.shot("waiting")
+    sim.back()
+    time.sleep(3)
+    img = snap(sim, rep, "after-one-back")
+    rep.check(not no_app(img), "one back leaves the widget open (it does not close)")
+    txt = sim.ocr(img)
+    rep.check(re.search(r"front\s*door", txt, re.I) is not None, "the stored entity is shown (Front Door)",
+              repr(txt[:80]))
+    rep.check(not m.requests(since), "nothing was sent without the phone")
 
 
 @scenario("fenix7x", "f7_wifi_offer_and_cancel", "Wi-Fi/LTE")
@@ -770,3 +823,1232 @@ def va3_entities_and_timers(sim, rep):
     crashes = sim.crashes_since(crash_mark)
     rep.check("Too Many Timers" not in crashes, "no 'Too Many Timers Error'", crashes[:200])
     rep.check(not sim.crashed(), "no crash")
+
+
+# ============================================================================ date and time
+# The date/time entity types: time.*, date.*, datetime.* and input_datetime.*.  The contract the
+# implementation follows, which the scenarios below check:
+#  * Full-memory devices edit the value in a view of its own, opened by selecting the entity: a "+" band
+#    at the top and a "-" band at the bottom (ZONE_FRACTION of the height, as InputNumberEditView), the
+#    entity name at the top, then only the rows the entity has - YYYY-MM-DD and/or HH:MM.
+#  * Fields year, month, day, hour, minute; the active one is a white box with black text, the first one
+#    at the start.  Up +1, down -1, wrapping (the year clamps); select = next field, confirm on the last;
+#    back = previous field, cancel on the first.  Touch: "+" band +1, "-" band -1, tapping a field makes
+#    it active, tapping the active one = select.  The day clamps to the month's length.
+#  * Sent, seconds always 00: time.set_value {"time": "HH:MM:00"}, date.set_value {"date": "YYYY-MM-DD"},
+#    datetime.set_value {"datetime": "YYYY-MM-DDTHH:MM:00+HH:MM"} (the watch's local time and offset),
+#    input_datetime.set_datetime with exactly {"date"}, {"time"} or {"datetime": "YYYY-MM-DD HH:MM:00"}.
+#  * Shown afterwards as 2026-11-01, 14:30 or 2026-11-01 14:30, in local time.
+#  * No phone and Wi-Fi/LTE execution on: confirming asks "Wi-Fi/LTE? / Setting <name> to <value>" first.
+#  * 64 KB devices show the value read-only; selecting it does nothing.
+#
+# Builds: dt-<device>.prg and dtwifi-fenix7x.prg from scripts/build-dt-variants.sh (group=datetime).
+# The mock's group.datetime, in group order - the index is how many next_page() reach an entity:
+DT_ENTITIES = ["time.lunch", "date.deadline", "datetime.launch", "input_datetime.alarm",
+               "input_datetime.vacation", "input_datetime.event"]
+DT_LUNCH, DT_DEADLINE, DT_LAUNCH, DT_ALARM, DT_VACATION, DT_EVENT = range(len(DT_ENTITIES))
+ZONE_FRACTION = 0.22          # InputNumberEditView.ZONE_FRACTION: the "+" and "-" bands
+CRASH_RE = re.compile(r"Encountered an app crash|Unhandled Exception|^Error: [^\n]*\n(?:Details|Stack):", re.M)
+_DIGIT_MAP = str.maketrans({"O": "0", "o": "0", "l": "1", "I": "1", "|": "1"})
+# Settings > Time Display, kept in simulator.ini as TimeSetting.  Without the key the simulator runs on
+# the 12-hour clock (System.DeviceSettings.is24Hour false), which gives the editor an AM/PM field.
+TIME_SETTING = {"12": "0", "24": "1"}
+
+
+def ensure_clock(sim, hours):
+    """Put the simulator on the 12- or 24-hour clock.  It reads the setting at start only, so a change
+    means a restart (written while no simulator runs - it rewrites the ini on exit).  True if it did."""
+    from ciqsim import INI
+    want = TIME_SETTING[hours]
+    current = None
+    if os.path.exists(INI):
+        for line in open(INI).read().splitlines():
+            if line.startswith("TimeSetting="):
+                current = line.split("=", 1)[1].strip()
+    if current == want:
+        return False
+    sim.stop()
+    sim._ini(TimeSetting=want)
+    sim.start()
+    sim.note(f"the simulator was restarted on the {hours}-hour clock (TimeSetting={want})")
+    return True
+
+
+def dt_fresh(sim, mock, variant="dt", clock="24"):
+    """Reset the mock and push <variant>-<device>.prg; returns (since, launched) like fresh().  On the
+    full-memory devices the simulator is put on the `clock` ("24" or "12") first; the 64 KB tier shows
+    the state as it is, on either clock."""
+    from ciqsim import LOWMEM
+    prg = f"{VARIANTS}/{variant}-{sim.device}.prg"
+    if not os.path.exists(prg):
+        raise FileNotFoundError(f"{prg} is missing - build it with scripts/build-dt-variants.sh")
+    if sim.device not in LOWMEM:
+        ensure_clock(sim, clock)
+    return fresh(sim, mock, variant)
+
+
+def wait_dt_entities(sim, mock, timeout=25, settle=2.5):
+    """Wait until the import of group.datetime fetched its last member, then give the widget a moment
+    to finish with it (the loader goes, the card is redrawn) before any key is pressed."""
+    got = mock.wait_request(re.escape("/api/states/" + DT_ENTITIES[-1]) + "$", timeout=timeout) is not None
+    if got:
+        time.sleep(settle)
+    elif re.search(r"wa\w*it|con+e\w*ion", sim.ocr(), re.I):     # OCR: "Weaitinnt", "conection"
+        sim.note("the widget is waiting for the phone: the simulator's phone was not connected at launch - "
+                 "a harness problem (the Settings menu between scenarios), not the widget's")
+    return got
+
+
+def goto(sim, index):
+    """From the first entity to the one at `index`; the card view shows one entity at a time."""
+    for _ in range(index):
+        sim.next_page()
+    time.sleep(1.5)           # the page bar shown on every move is gone a second later
+
+
+def _components(mask):
+    """4-connected components of a boolean array: (labels, [bounding slices]), label i at index i-1."""
+    try:
+        from scipy import ndimage
+        labels, _ = ndimage.label(mask)
+        return labels, ndimage.find_objects(labels)
+    except ImportError:
+        pass
+    h, w = mask.shape
+    labels = np.zeros((h, w), dtype=np.int32)
+    slices = []
+    for y0, x0 in zip(*np.nonzero(mask)):
+        if labels[y0, x0]:
+            continue
+        n = len(slices) + 1
+        labels[y0, x0] = n
+        stack, box = [(y0, x0)], [y0, y0, x0, x0]
+        while stack:
+            y, x = stack.pop()
+            box = [min(box[0], y), max(box[1], y), min(box[2], x), max(box[3], x)]
+            for ny, nx in ((y - 1, x), (y + 1, x), (y, x - 1), (y, x + 1)):
+                if 0 <= ny < h and 0 <= nx < w and mask[ny, nx] and not labels[ny, nx]:
+                    labels[ny, nx] = n
+                    stack.append((ny, nx))
+        slices.append((slice(box[0], box[1] + 1), slice(box[2], box[3] + 1)))
+    return labels, slices
+
+
+def _fill_holes(mask):
+    """`mask` with every region it encloses filled in (4-connected background, as scipy's default)."""
+    try:
+        from scipy import ndimage
+        return ndimage.binary_fill_holes(mask)
+    except ImportError:
+        pass
+    bg = ~mask
+    reach = np.zeros_like(mask)
+    reach[0, :], reach[-1, :], reach[:, 0], reach[:, -1] = bg[0, :], bg[-1, :], bg[:, 0], bg[:, -1]
+    while True:
+        grown = reach.copy()
+        grown[1:, :] |= reach[:-1, :]
+        grown[:-1, :] |= reach[1:, :]
+        grown[:, 1:] |= reach[:, :-1]
+        grown[:, :-1] |= reach[:, 1:]
+        grown &= bg
+        if (grown == reach).all():
+            return ~reach
+        reach = grown
+
+
+def _opening(mask, k):
+    """Morphological opening with a k x k square (k odd): what is thinner than k goes, rectangles stay."""
+    def run(a, axis, reduce):
+        pad = [(0, 0), (0, 0)]
+        pad[axis] = (k // 2, k // 2)
+        win = np.lib.stride_tricks.sliding_window_view(np.pad(a, pad, constant_values=False), k, axis=axis)
+        return reduce(win, axis=-1)
+    eroded = run(run(mask, 0, np.all), 1, np.all)
+    return run(run(eroded, 0, np.any), 1, np.any)
+
+
+def editor_boxes(sim, img=None):
+    """The active field between the editor's bands: a white filled box with dark text in it.
+
+    The white parts of the screen are taken with the dark text inside them filled in, which makes the
+    box one solid rectangle; an opening then removes everything thinner than about 4.5 % of the height -
+    glyph strokes, and the "-" or ":" separators that touch the box when its padding reaches them.  What
+    remains has to be box-shaped (at least about as wide as tall, solid) and must hold dark text (a
+    glyph's filled-in counter is solid dark instead).  Returns dicts (cx, cy, w, h, bbox) in display
+    coordinates, largest first."""
+    img = img if img is not None else sim.display_shot()
+    w, h = sim.display_size()
+    top, bottom = int(h * ZONE_FRACTION) + 1, int(h * (1 - ZONE_FRACTION)) - 1
+    mask = np.asarray(img.convert("L"))[top:bottom, :] > 200
+    k = max(5, int(h * 0.045)) | 1
+    filled = _fill_holes(mask)
+    solid = _opening(filled, k)
+    labels, slices = _components(solid)
+    boxes = []
+    for i, sl in enumerate(slices, 1):
+        if sl is None:
+            continue
+        ys, xs = sl
+        bh, bw = ys.stop - ys.start, xs.stop - xs.start
+        if bw < 0.06 * w or bh < 0.04 * h or bw < 0.9 * bh:
+            continue
+        if (labels[sl] == i).mean() < 0.85:
+            continue
+        dark = 1.0 - float(mask[sl].mean())
+        if not 0.05 <= dark <= 0.6:
+            continue
+        boxes.append({"cx": xs.start + bw / 2.0, "cy": top + ys.start + bh / 2.0, "w": bw, "h": bh,
+                      "bbox": (xs.start, top + ys.start, xs.stop, top + ys.stop), "area": bw * bh,
+                      "shape": filled[sl]})
+    boxes.sort(key=lambda b: -b["area"])
+    return boxes
+
+
+def active_box(sim, img=None):
+    boxes = editor_boxes(sim, img)
+    return boxes[0] if boxes else None
+
+
+def box_str(b):
+    return "no white box found" if not b else f"box at ({b['cx']:.0f},{b['cy']:.0f}) {b['w']}x{b['h']}"
+
+
+def editor_open(sim, img=None):
+    """Are the editor's "+"/"-" bands on screen?  Four samples in the two bands, to the sides of the
+    glyphs (and of a name, should it be drawn there) and inside a round screen, have to show one and the
+    same colour, neither black nor white."""
+    img = img if img is not None else sim.display_shot()
+    w, h = sim.display_size()
+    a = np.asarray(img.convert("RGB")).astype(int)
+    pts = []
+    for fx in (0.25, 0.75):
+        for fy in (0.15, 0.85):
+            x, y = int(w * fx), int(h * fy)
+            pts.append(a[y - 2:y + 3, x - 2:x + 3].reshape(-1, 3).mean(axis=0))
+    return bool(all(12 < p.mean() < 200 for p in pts) and all(np.abs(p - pts[0]).max() < 30 for p in pts))
+
+
+def normalized(sim, img=None):
+    """The display with the active field's box inverted: all text is then light on dark, and the OCR
+    reads the active field too (it skips dark text in a white box on an otherwise dark screen)."""
+    img = img if img is not None else sim.display_shot()
+    a = np.asarray(img.convert("L")).copy()
+    for b in editor_boxes(sim, img):
+        x0, y0, x1, y1 = b["bbox"]
+        # Only inside the box's own shape: its rounded corners are dark, and inverted they turn into
+        # white wedges that the OCR reads as brackets ("[2" for a boxed "12" on the Venu Sq 2).
+        region = a[y0:y1, x0:x1]
+        a[y0:y1, x0:x1] = np.where(b["shape"], 255 - region, region)
+    return Image.fromarray(a)
+
+
+def editor_text(sim, img=None):
+    """OCR of the editor: the whole display, and larger the strip under the "+" band with the name."""
+    img = img if img is not None else sim.display_shot()
+    w, h = sim.display_size()
+    norm = normalized(sim, img)
+    return (sim.ocr(norm, scale=4, psm=6) + "\n" +
+            sim.ocr(norm.crop((0, int(h * ZONE_FRACTION), w, int(h * 0.45))), scale=6, psm=6))
+
+
+def card_text(sim, img=None):
+    """OCR of the entity card: the whole display, and larger its lower part with name and value."""
+    img = img if img is not None else sim.display_shot()
+    w, h = sim.display_size()
+    return (sim.ocr(img, scale=4, psm=6) + "\n" +
+            sim.ocr(img.crop((0, int(h * 0.42), w, int(h * 0.92))), scale=5, psm=6))
+
+
+def _has(txt, part):
+    """`part` in the OCR text; digits are matched with O/o read as 0 and l/I/| as 1, spaces ignored -
+    so "14" and "05" are found in "14:05", "l4:O5" or "14 : 05"."""
+    if part.isdigit():
+        return part in re.sub(r"[ \t]+", "", txt.translate(_DIGIT_MAP))
+    return part.lower() in txt.lower()
+
+
+def time_row_digits(sim, img):
+    """The editor's time row read on its own: the row of the active field, at twice the size, digits and
+    ':' only.  The whole-screen OCR reads this font's "55" as "59" (fenix 7X, FONT_NUMBER_MEDIUM); this
+    way every minute seen so far reads right (checked on 10 screenshots of known values)."""
+    w, h = sim.display_size()
+    b = active_box(sim, img)
+    y0, y1 = (b["bbox"][1] - 4, b["bbox"][3] + 4) if b else (int(h * 0.4), int(h * 0.6))
+    g = 255 - np.asarray(normalized(sim, img).crop((0, max(y0, 0), w, min(y1, h))).convert("L"))
+    big = Image.fromarray(g).resize((g.shape[1] * 2, g.shape[0] * 2), Image.LANCZOS)
+    bw = Image.fromarray(np.where(np.asarray(big) > 128, 255, 0).astype(np.uint8))
+    padded = Image.new("L", (bw.size[0] + 40, bw.size[1] + 40), 255)
+    padded.paste(bw, (20, 20))
+    buf = io.BytesIO()
+    padded.save(buf, format="PNG")
+    out = subprocess.run(["tesseract", "stdin", "stdout", "--psm", "7", "-c", "tessedit_char_whitelist=0123456789:"],
+                         input=buf.getvalue(), capture_output=True, timeout=60)
+    return out.stdout.decode(errors="replace").strip()
+
+
+def _minute_of(txt):
+    """The minute of the first HH:MM (or H:MM) in OCR text, as a number, or None."""
+    m = re.search(r"(\d{1,2})\s*:\s*(\d{2})", re.sub(r"[ \t]+", "", txt.translate(_DIGIT_MAP)))
+    return int(m.group(2)) if m else None
+
+
+def _matches(txt, parts, absent):
+    return all(_has(txt, p) for p in parts) and not any(_has(txt, a) for a in absent)
+
+
+def wait_editor(sim, parts, timeout=6.0, absent=()):
+    """Poll the editor until its text holds every string of `parts` and none of `absent`."""
+    end = time.time() + timeout
+    while True:
+        txt = editor_text(sim)
+        if _matches(txt, parts, absent) or time.time() >= end:
+            return _matches(txt, parts, absent), txt
+        time.sleep(0.4)
+
+
+def wait_card(sim, parts, timeout=8.0, absent=()):
+    """Poll until the entity card - not the editor - shows every string of `parts` and none of `absent`."""
+    end = time.time() + timeout
+    while True:
+        img = sim.display_shot()
+        if editor_open(sim, img):
+            ok, txt = False, "[the editor is still open] " + editor_text(sim, img)
+        else:
+            txt = card_text(sim, img)
+            ok = _matches(txt, parts, absent)
+        if ok or time.time() >= end:
+            return ok, txt
+        time.sleep(0.4)
+
+
+def row_extent(sim, cy, half, img=None):
+    """Left and right end of what is drawn in the editor row around y=cy (display coordinates)."""
+    img = img if img is not None else sim.display_shot()
+    w, h = sim.display_size()
+    g = np.asarray(img.convert("L"))
+    y0 = max(int(cy - half), int(h * ZONE_FRACTION) + 1)
+    y1 = min(int(cy + half) + 1, int(h * (1 - ZONE_FRACTION)) - 1)
+    x0, x1 = int(w * 0.06), int(w * 0.94)          # clear of the bezel in a round display's corners
+    cols = np.nonzero((g[y0:y1, x0:x1] > 128).any(axis=0))[0]
+    return None if len(cols) == 0 else (x0 + int(cols[0]), x0 + int(cols[-1]))
+
+
+def field_point(sim, frac, cy, half, img=None):
+    """Where a field sits in its row, as a fraction of the row's drawn width: "HH:MM" has the hour at
+    0.2 and the minute at 0.8, "YYYY-MM-DD" the year at 0.2, the month at 0.6 and the day at 0.9."""
+    ext = row_extent(sim, cy, half, img)
+    if ext is None:
+        return None
+    return (int(ext[0] + frac * (ext[1] - ext[0])), int(cy))
+
+
+def tap_box(sim, box, fallback):
+    """Tap the centre of the active field's box, or `fallback` (display coordinates) without one."""
+    x, y = (box["cx"], box["cy"]) if box else fallback
+    sim.tap(int(x), int(y))
+
+
+def check_body(rep, call, expected, what):
+    """The service call carried exactly `expected` (entity_id and the service data, nothing more)."""
+    body = call.get("body") if call else None
+    status = call.get("status") if call else None
+    return rep.check(body == expected, what, f"sent {body!r} -> HTTP {status}")
+
+
+def check_no_crash(rep, sim, crash_mark):
+    """No crash in the app's output (a crash prints "Error: <name>" with Details/Stack, then "Encountered
+    an app crash") nor in the simulator's CIQ_LOG.YML.  Not sim.crashed(): that also matches the widget's
+    own "Error: Phone not connected" and "RequestError: ..." lines."""
+    m = CRASH_RE.search(sim.applog())
+    logged = sim.crashes_since(crash_mark).strip()
+    detail = (m.group(0)[:120] if m else "") + (f" | CIQ_LOG.YML: {logged[:200]!r}" if logged else "")
+    return rep.check(m is None and not logged, "no crash", detail)
+
+
+def open_editor(sim, rep, parts, what):
+    """Select the entity on screen and wait for its editor; False (with a screenshot) when it did not
+    open - the remaining steps would then act on the entity list instead."""
+    sim.select()
+    time.sleep(1.5)
+    ok, txt = wait_editor(sim, parts)
+    is_open = editor_open(sim)
+    rep.check(ok, what, repr(txt))
+    rep.check(is_open, "the editor draws its +/- bands")
+    if not (ok or is_open):
+        rep.shot("no-editor")
+        return False
+    return True
+
+
+def launch_expectations():
+    """datetime.launch is 2026-11-01T13:30:00+00:00.  The simulator's clock follows the host's time zone,
+    so the expected local value and offset come from the host's zone at that date (not the offset of
+    today - though for this date both are the same until the next DST change)."""
+    utc = _dt.datetime(2026, 11, 1, 13, 30, tzinfo=_dt.timezone.utc)
+    wall = utc.astimezone().replace(tzinfo=None)            # local wall time on the watch
+    new = wall.replace(minute=(wall.minute + 1) % 60)      # one up on the minute: it wraps, nothing carries
+    sent = new.astimezone()                                 # the host's offset at that wall time
+    z = sent.strftime("%z")
+    offset = z[:3] + ":" + z[3:]
+    return {"wall": wall, "new": new, "offset": offset, "offset_s": int(utc.astimezone().utcoffset().total_seconds()),
+            "body": f"{new:%Y-%m-%dT%H:%M}:00{offset}", "instant": sent.astimezone(_dt.timezone.utc),
+            "utc_equals_local": utc.utcoffset() == utc.astimezone().utcoffset()}
+
+
+# ---------------------------------------------------------------------------- shared flows
+def _dt_time_buttons(sim, rep):
+    """time.lunch with the buttons: up twice 12 -> 14, select, up five times 00 -> 05, select sends."""
+    m = sim.mock
+    crash_mark = sim.crash_mark()
+    since, launched = dt_fresh(sim, m)
+    rep.check(launched, "the widget opened")
+    rep.check(wait_dt_entities(sim, m), "the six date/time entities were imported",
+              f"{len(m.requests(since))} requests")
+    ok, txt = wait_card(sim, ["12", "00"])
+    rep.check(ok, "the card shows time.lunch as 12:00", repr(txt))
+    rep.shot("card-before")
+
+    mark = time.time()
+    if not open_editor(sim, rep, ["12", "00"], "selecting time.lunch opens the editor at 12:00"):
+        return
+    txt = editor_text(sim)
+    rep.check(re.search(r"lunch", txt, re.I) is not None, "the editor shows the name (Lunch)", repr(txt))
+    w = sim.display_size()[0]
+    hour = active_box(sim)
+    rep.check(hour is not None and hour["cx"] < w / 2,
+              "the hour is the active field (white box, left of centre)", box_str(hour))
+    rep.shot("editor-open")
+
+    # The hour wraps: 13 times down from 12 passes 00 and comes out at 23.  Back on the first field then
+    # leaves without sending anything, and the main flow starts again from the stored 12:00.
+    for _ in range(13):
+        sim.key("down", settle=0.4)
+    ok, txt = wait_editor(sim, ["23", "00"])
+    rep.check(ok, "down 13 times from 12: the hour wraps from 00 to 23", repr(txt))
+    rep.shot("editor-hour-wrapped")
+    sim.back()
+    time.sleep(1.0)
+    rep.check(not editor_open(sim), "back on the hour (the first field) leaves the editor")
+    no_service_call(rep, m, mark, "after the wrap and back")
+    if not open_editor(sim, rep, ["12", "00"], "the editor opens again at the stored 12:00"):
+        return
+
+    for _ in range(2):
+        sim.key("up", settle=0.5)
+    ok, txt = wait_editor(sim, ["14", "00"])
+    rep.check(ok, "up twice: 14:00", repr(txt))
+    rep.shot("editor-14-00")
+
+    sim.select()
+    minute = active_box(sim)
+    rep.check(minute is not None and hour is not None and minute["cx"] > hour["cx"] + 0.05 * w,
+              "select moves to the minute (the box moves right)", f"{box_str(hour)} -> {box_str(minute)}")
+    for _ in range(5):
+        sim.key("up", settle=0.4)
+    ok, txt = wait_editor(sim, ["14", "05"])
+    rep.check(ok, "up five times: 14:05", repr(txt))
+    no_service_call(rep, m, mark, "while the value is edited")
+    rep.shot("editor-14-05")
+
+    sim.select()
+    call = m.wait_request(r"^/api/services/time/set_value$", timeout=10, since=mark, method="POST")
+    rep.check(call is not None, "select on the minute (the last field) sends time/set_value",
+              f"calls: {services_called(m, mark)}")
+    check_body(rep, call, {"entity_id": "time.lunch", "time": "14:05:00"},
+               'the body is exactly {"time": "14:05:00"} for time.lunch (seconds 00)')
+    time.sleep(1.5)
+    rep.check(m.state("time.lunch") == "14:05:00", "Home Assistant (the mock) now reports 14:05:00",
+              m.state("time.lunch"))
+    ok, txt = wait_card(sim, ["14", "05"], timeout=10)
+    rep.check(ok, "back on the card, it shows 14:05", repr(txt))
+    rep.shot("card-after")
+    check_no_crash(rep, sim, crash_mark)
+
+
+def _dt_time_touch(sim, rep):
+    """time.lunch by touch: two taps on the "+" band 12 -> 14, a tap on the active hour moves on to the
+    minute, five taps 00 -> 05, a tap on the active minute (the last field) sends."""
+    m = sim.mock
+    crash_mark = sim.crash_mark()
+    since, launched = dt_fresh(sim, m)
+    rep.check(launched, "the widget opened")
+    rep.check(wait_dt_entities(sim, m), "the six date/time entities were imported",
+              f"{len(m.requests(since))} requests")
+    ok, txt = wait_card(sim, ["12", "00"])
+    rep.check(ok, "the card shows time.lunch as 12:00", repr(txt))
+
+    w, h = sim.display_size()
+    plus = (w // 2, int(h * ZONE_FRACTION / 2))
+    mark = time.time()
+    if not open_editor(sim, rep, ["12", "00"], "selecting time.lunch opens the editor at 12:00"):
+        return
+    hour = active_box(sim)
+    rep.check(hour is not None and hour["cx"] < w / 2,
+              "the hour is the active field (white box, left of centre)", box_str(hour))
+    rep.shot("editor-open")
+
+    for _ in range(2):
+        sim.tap(*plus, settle=0.5)
+    ok, txt = wait_editor(sim, ["14", "00"])
+    rep.check(ok, "two taps on the + band: 14:00", repr(txt))
+    rep.shot("editor-14-00")
+
+    # The hour box was found before the taps; the field does not move when its value changes.
+    hour_now = active_box(sim) or hour
+    cy = hour_now["cy"] if hour_now else h / 2
+    tap_box(sim, hour_now, field_point(sim, 0.2, cy, h * 0.05) or (w / 2 - 0.12 * w, cy))
+    minute = active_box(sim)
+    rep.check(minute is not None and hour_now is not None and minute["cx"] > hour_now["cx"] + 0.05 * w,
+              "a tap on the active hour moves to the minute", f"{box_str(hour_now)} -> {box_str(minute)}")
+    no_service_call(rep, m, mark, "after tapping the active hour (not the last field)")
+
+    for _ in range(5):
+        sim.tap(*plus, settle=0.4)
+    ok, txt = wait_editor(sim, ["14", "05"])
+    rep.check(ok, "five taps on the + band: 14:05", repr(txt))
+    rep.shot("editor-14-05")
+
+    minute_now = active_box(sim) or minute
+    tap_box(sim, minute_now, field_point(sim, 0.8, cy, h * 0.05) or (w / 2 + 0.12 * w, cy))
+    call = m.wait_request(r"^/api/services/time/set_value$", timeout=10, since=mark, method="POST")
+    rep.check(call is not None, "a tap on the active minute (the last field) sends time/set_value",
+              f"calls: {services_called(m, mark)}")
+    check_body(rep, call, {"entity_id": "time.lunch", "time": "14:05:00"},
+               'the body is exactly {"time": "14:05:00"} for time.lunch')
+    time.sleep(1.5)
+    ok, txt = wait_card(sim, ["14", "05"], timeout=10)
+    rep.check(ok, "back on the card, it shows 14:05", repr(txt))
+    rep.shot("card-after")
+    check_no_crash(rep, sim, crash_mark)
+
+
+def _dt_readonly(sim, rep):
+    """64 KB build: the group is imported over https and shown, but selecting a value does nothing."""
+    m = sim.mock                  # the TLS mock: the 64 KB builds are https-only
+    crash_mark = sim.crash_mark()
+    since, launched = dt_fresh(sim, m)
+    rep.check(launched, "the widget opened")
+    rep.check(wait_dt_entities(sim, m, timeout=40), "group.datetime was imported over https",
+              f"{len(m.requests(since))} requests")
+    fetched = {e["path"].rsplit("/", 1)[-1] for e in m.requests(since) if e["method"] == "GET"}
+    missing = [e for e in DT_ENTITIES if e not in fetched]
+    rep.check(not missing, "all six members were fetched", f"missing: {missing}")
+
+    def on_loop_page():
+        return re.search(r"hass\s*control", sim.ocr(), re.I) is not None
+
+    if on_loop_page():
+        # The vivoactive 3 has no glances: the widget opens on its own page of the widget loop
+        # (BaseView), and a tap enters the entity view - its single button does not.
+        w, h = sim.display_size()
+        sim.tap(w // 2, h // 2)
+        time.sleep(2.5)
+        rep.check(not on_loop_page(), "a tap on the widget's page in the loop opens the entity card")
+    ok, txt = wait_card(sim, ["12", "00"], timeout=10)
+    rep.check(ok, "the card shows time.lunch's value (12 and 00 anywhere - OCR is poor on this screen)",
+              repr(txt))
+    rep.shot("card")
+
+    mark = time.time()
+    if sim.dev.touch:
+        w, h = sim.display_size()
+        sim.tap(w // 2, h // 2)       # a tap on the card is what selects on a touch screen
+    else:
+        sim.select()
+    time.sleep(3)
+    rep.shot("after-select")
+    reqs = m.requests(mark)
+    rep.check(not reqs, "selecting it sends nothing (read-only on 64 KB devices)",
+              f"{[(e['method'], e['path']) for e in reqs]}")
+    check_no_crash(rep, sim, crash_mark)
+    rep.check(sim.running(), "the widget is still running")
+    used, total = sim.memory()
+    rep.check(used is not None and total is not None and used < total,
+              "the simulator reports memory within the budget", f"{used}/{total} kB")
+
+
+# ============================================================================ fenix7x: date and time
+@scenario("fenix7x", "f7_dt_time_buttons", "date and time")
+def f7_dt_time_buttons(sim, rep):
+    """time.lunch (12:00:00) on the buttons: the editor shows the name and 12:00 with the hour active;
+    up twice gives 14:00, select moves to the minute, up five times gives 14:05, select on the last
+    field sends time/set_value {"time": "14:05:00"} and the card then shows 14:05."""
+    _dt_time_buttons(sim, rep)
+
+
+@scenario("fenix7x", "f7_dt_date_clamps", "date and time")
+def f7_dt_date_clamps(sim, rep):
+    """date.deadline (2026-01-31): select leaves the year as it is and moves to the month; up makes it
+    February and the day follows to 28; select, select sends date/set_value {"date": "2026-02-28"}."""
+    m = sim.mock
+    crash_mark = sim.crash_mark()
+    since, launched = dt_fresh(sim, m)
+    rep.check(wait_dt_entities(sim, m), "the date/time entities were imported")
+    goto(sim, DT_DEADLINE)
+    ok, txt = wait_card(sim, ["2026", "01", "31"])
+    rep.check(ok, "the card shows date.deadline as 2026-01-31", repr(txt))
+
+    mark = time.time()
+    if not open_editor(sim, rep, ["2026", "01", "31"], "the editor opens at 2026-01-31"):
+        return
+    year = active_box(sim)
+    rep.check(year is not None, "the first field (the year) is active", box_str(year))
+    rep.shot("editor-open")
+
+    sim.select()
+    month = active_box(sim)
+    rep.check(year is not None and month is not None and month["cx"] > year["cx"],
+              "select moves to the month (the box moves right)", f"{box_str(year)} -> {box_str(month)}")
+    sim.key("up")
+    ok, txt = wait_editor(sim, ["2026", "02", "28"])
+    rep.check(ok, "up on the month: 2026-02-28 - February, and the day clamped from 31 to 28", repr(txt))
+    rep.shot("editor-feb-28")
+
+    sim.select()
+    day = active_box(sim)
+    rep.check(month is not None and day is not None and day["cx"] > month["cx"],
+              "select moves to the day", f"{box_str(month)} -> {box_str(day)}")
+    no_service_call(rep, m, mark, "before the last field is confirmed")
+    sim.select()
+    call = m.wait_request(r"^/api/services/date/set_value$", timeout=10, since=mark, method="POST")
+    rep.check(call is not None, "select on the day (the last field) sends date/set_value",
+              f"calls: {services_called(m, mark)}")
+    check_body(rep, call, {"entity_id": "date.deadline", "date": "2026-02-28"},
+               'the body is exactly {"date": "2026-02-28"}')
+    time.sleep(1.5)
+    rep.check(m.state("date.deadline") == "2026-02-28", "the mock now reports 2026-02-28",
+              m.state("date.deadline"))
+    ok, txt = wait_card(sim, ["2026", "02", "28"], timeout=10)
+    rep.check(ok, "the card shows 2026-02-28", repr(txt))
+    rep.shot("card-after")
+    check_no_crash(rep, sim, crash_mark)
+
+
+@scenario("fenix7x", "f7_dt_datetime_local", "date and time")
+def f7_dt_datetime_local(sim, rep):
+    """datetime.launch is stored in UTC (2026-11-01T13:30:00+00:00) and shown in the watch's local time.
+    Four selects reach the minute, up adds one, select sends datetime/set_value with the local time and
+    the watch's offset ("YYYY-MM-DDTHH:MM:00+HH:MM"); the card then shows the new local time.  The
+    simulator follows the host's time zone, so the expectations are computed from it."""
+    m = sim.mock
+    crash_mark = sim.crash_mark()
+    exp = launch_expectations()
+    wall, new = exp["wall"], exp["new"]
+    if exp["utc_equals_local"]:
+        sim.note("the host runs on UTC, so local time and UTC look the same here - this scenario cannot "
+                 "tell a missing conversion from a correct one")
+    since, launched = dt_fresh(sim, m)
+    rep.check(wait_dt_entities(sim, m), "the date/time entities were imported")
+    goto(sim, DT_LAUNCH)
+    ok, txt = wait_card(sim, [f"{wall:%Y}", f"{wall:%H}", f"{wall:%M}"])
+    rep.check(ok, f"the card shows datetime.launch in local time ({wall:%Y-%m-%d %H:%M}, offset "
+                  f"{exp['offset']})", repr(txt))
+    rep.shot("card-before")
+    logged = sim.wait_log(r"DateTimeValue: UTC offset (-?\d+) s", timeout=6)
+    rep.check(logged is not None and int(logged.group(1)) == exp["offset_s"],
+              f"the watch's UTC offset (app log) is the host zone's at that date, {exp['offset_s']} s - "
+              f"the expectations here are computed from it", logged.group(0) if logged else "no such log line")
+
+    mark = time.time()
+    if not open_editor(sim, rep, [f"{wall:%Y}", f"{wall:%H}", f"{wall:%M}"],
+                       f"the editor opens at the local {wall:%Y-%m-%d %H:%M}"):
+        return
+    w = sim.display_size()[0]
+    year = active_box(sim)
+    rep.check(year is not None, "the first field (the year) is active", box_str(year))
+    rep.shot("editor-open")
+    for _ in range(4):
+        sim.select()
+    minute = active_box(sim)
+    rep.check(year is not None and minute is not None and minute["cy"] > year["cy"] + 5
+              and minute["cx"] > w / 2,
+              "four selects reach the minute (lower row, right part)", f"{box_str(year)} -> {box_str(minute)}")
+    sim.key("up")
+    ok, txt = wait_editor(sim, [f"{new:%H}", f"{new:%M}"])
+    rep.check(ok, f"up on the minute: {new:%H:%M}", repr(txt))
+    no_service_call(rep, m, mark, "before the last field is confirmed")
+    rep.shot("editor-plus-one-minute")
+
+    sim.select()
+    call = m.wait_request(r"^/api/services/datetime/set_value$", timeout=10, since=mark, method="POST")
+    rep.check(call is not None, "select on the minute (the last field) sends datetime/set_value",
+              f"calls: {services_called(m, mark)}")
+    check_body(rep, call, {"entity_id": "datetime.launch", "datetime": exp["body"]},
+               f"the body is exactly {{\"datetime\": \"{exp['body']}\"}} - local time, the host's offset")
+    sent = call["body"].get("datetime") if call and isinstance(call.get("body"), dict) else None
+    try:
+        instant = _dt.datetime.fromisoformat(sent).astimezone(_dt.timezone.utc) if sent else None
+    except (TypeError, ValueError):
+        instant = None
+    rep.check(instant == exp["instant"], "it denotes the intended moment (13:31 UTC)", f"{sent} -> {instant}")
+    time.sleep(1.5)
+    rep.check(m.state("datetime.launch") == exp["body"], "the mock stored it as sent", m.state("datetime.launch"))
+    ok, txt = wait_card(sim, [f"{new:%H}", f"{new:%M}"], timeout=10)
+    rep.check(ok, f"the card shows the new local time {new:%H:%M}", repr(txt))
+    rep.shot("card-after")
+    check_no_crash(rep, sim, crash_mark)
+
+
+@scenario("fenix7x", "f7_dt_input_datetime_time_only", "date and time")
+def f7_dt_input_datetime_time_only(sim, rep):
+    """input_datetime.alarm has a time only (has_date false): the editor has no date row; up makes 06:30
+    07:30, select, select sends input_datetime/set_datetime with "time": "07:30:00" and no date or
+    datetime key (the mock refuses those for a time-only entity with 400, as Home Assistant would)."""
+    m = sim.mock
+    crash_mark = sim.crash_mark()
+    since, launched = dt_fresh(sim, m)
+    rep.check(wait_dt_entities(sim, m), "the date/time entities were imported")
+    goto(sim, DT_ALARM)
+    ok, txt = wait_card(sim, ["06", "30"])
+    rep.check(ok, "the card shows input_datetime.alarm as 06:30", repr(txt))
+
+    mark = time.time()
+    if not open_editor(sim, rep, ["06", "30"], "the editor opens at 06:30"):
+        return
+    txt = editor_text(sim)
+    rep.check(re.search(r"(19|20)\d\d", txt) is None, "only a time row: no year anywhere on the editor",
+              repr(txt))
+    rep.shot("editor-open")
+    sim.key("up")
+    ok, txt = wait_editor(sim, ["07", "30"])
+    rep.check(ok, "up on the hour: 07:30", repr(txt))
+    sim.select()
+    no_service_call(rep, m, mark, "before the last field is confirmed")
+    sim.select()
+    call = m.wait_request(r"^/api/services/input_datetime/set_datetime$", timeout=10, since=mark, method="POST")
+    rep.check(call is not None, "select on the minute sends input_datetime/set_datetime",
+              f"calls: {services_called(m, mark)}")
+    body = call.get("body") if call else None
+    body = body if isinstance(body, dict) else {}
+    rep.check(body.get("time") == "07:30:00" and body.get("entity_id") == "input_datetime.alarm",
+              'it sets "time": "07:30:00" on input_datetime.alarm', f"sent {body!r}")
+    rep.check("date" not in body and "datetime" not in body, "and has no date or datetime key",
+              f"sent {body!r} -> HTTP {call.get('status') if call else None}")
+    time.sleep(1.5)
+    rep.check(m.state("input_datetime.alarm") == "07:30:00", "the mock accepted it: 07:30:00",
+              m.state("input_datetime.alarm"))
+    ok, txt = wait_card(sim, ["07", "30"], timeout=10)
+    rep.check(ok, "the card shows 07:30", repr(txt))
+    rep.shot("card-after")
+    check_no_crash(rep, sim, crash_mark)
+
+
+@scenario("fenix7x", "f7_dt_input_datetime_both", "date and time")
+def f7_dt_input_datetime_both(sim, rep):
+    """input_datetime.event (date and time, 2026-12-24 18:00:00): up on the month wraps 12 to 01 (the
+    year stays), down on the minute wraps 00 to 59 (the hour stays); confirming sends
+    input_datetime/set_datetime with exactly {"datetime": "2026-01-24 18:59:00"} - a space, no offset.
+    (Beyond the requested list: covers down = -1, wrapping and the both-format body.)"""
+    m = sim.mock
+    crash_mark = sim.crash_mark()
+    since, launched = dt_fresh(sim, m)
+    rep.check(wait_dt_entities(sim, m), "the date/time entities were imported")
+    goto(sim, DT_EVENT)
+    mark = time.time()
+    if not open_editor(sim, rep, ["2026", "12", "24", "18", "00"], "the editor opens at 2026-12-24 18:00"):
+        return
+    rep.shot("editor-open")
+    sim.select()                      # year -> month
+    sim.key("up")
+    ok, txt = wait_editor(sim, ["2026", "01", "24"], absent=["12"])
+    rep.check(ok, "up on month 12 wraps to 01, the year stays 2026", repr(txt))
+    rep.shot("editor-month-wrapped")
+    for _ in range(3):                # month -> day -> hour -> minute
+        sim.select()
+    sim.key("down")
+    ok, txt = wait_editor(sim, ["18", "59"])
+    rep.check(ok, "down on minute 00 wraps to 59, the hour stays 18", repr(txt))
+    rep.shot("editor-minute-wrapped")
+    no_service_call(rep, m, mark, "before the last field is confirmed")
+    sim.select()
+    call = m.wait_request(r"^/api/services/input_datetime/set_datetime$", timeout=10, since=mark, method="POST")
+    rep.check(call is not None, "select on the minute sends input_datetime/set_datetime",
+              f"calls: {services_called(m, mark)}")
+    body = call.get("body") if call else None
+    rep.check(isinstance(body, dict) and set(body) == {"entity_id", "datetime"},
+              "with a datetime key only (no separate date or time)", f"sent {body!r}")
+    sent = body.get("datetime") if isinstance(body, dict) else None
+    rep.check(isinstance(sent, str) and re.fullmatch(r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:00", sent) is not None,
+              'in the form "YYYY-MM-DD HH:MM:00" (space, seconds 00, no offset)', repr(sent))
+    check_body(rep, call, {"entity_id": "input_datetime.event", "datetime": "2026-01-24 18:59:00"},
+               'the body is exactly {"datetime": "2026-01-24 18:59:00"}')
+    time.sleep(1.5)
+    rep.check(m.state("input_datetime.event") == "2026-01-24 18:59:00", "the mock now reports it",
+              m.state("input_datetime.event"))
+    ok, txt = wait_card(sim, ["2026", "01", "24", "18", "59"], timeout=10)
+    rep.check(ok, "the card shows 2026-01-24 18:59", repr(txt))
+    rep.shot("card-after")
+    check_no_crash(rep, sim, crash_mark)
+
+
+@scenario("fenix7x", "f7_dt_input_datetime_date_only", "date and time")
+def f7_dt_input_datetime_date_only(sim, rep):
+    """input_datetime.vacation has a date only (2026-07-01): no time row; down on the day wraps 01 to 31
+    (July's length); confirming sends input_datetime/set_datetime {"date": "2026-07-31"} and nothing else.
+    (Beyond the requested list: covers the date-only body and the day wrapping down.)"""
+    m = sim.mock
+    crash_mark = sim.crash_mark()
+    since, launched = dt_fresh(sim, m)
+    rep.check(wait_dt_entities(sim, m), "the date/time entities were imported")
+    goto(sim, DT_VACATION)
+    mark = time.time()
+    if not open_editor(sim, rep, ["2026", "07", "01"], "the editor opens at 2026-07-01"):
+        return
+    txt = editor_text(sim)
+    rep.check(re.search(r"\d\d\s*:\s*\d\d", txt) is None, "only a date row: no HH:MM on the editor", repr(txt))
+    rep.shot("editor-open")
+    sim.select()                      # year -> month
+    sim.select()                      # month -> day
+    sim.key("down")
+    ok, txt = wait_editor(sim, ["2026", "07", "31"])
+    rep.check(ok, "down on day 01 wraps to 31 (July)", repr(txt))
+    no_service_call(rep, m, mark, "before the last field is confirmed")
+    sim.select()
+    call = m.wait_request(r"^/api/services/input_datetime/set_datetime$", timeout=10, since=mark, method="POST")
+    rep.check(call is not None, "select on the day (the last field) sends input_datetime/set_datetime",
+              f"calls: {services_called(m, mark)}")
+    check_body(rep, call, {"entity_id": "input_datetime.vacation", "date": "2026-07-31"},
+               'the body is exactly {"date": "2026-07-31"} - no time or datetime key')
+    time.sleep(1.5)
+    rep.check(m.state("input_datetime.vacation") == "2026-07-31", "the mock accepted it: 2026-07-31",
+              m.state("input_datetime.vacation"))
+    ok, txt = wait_card(sim, ["2026", "07", "31"], timeout=10)
+    rep.check(ok, "the card shows 2026-07-31", repr(txt))
+    rep.shot("card-after")
+    check_no_crash(rep, sim, crash_mark)
+
+
+@scenario("fenix7x", "f7_dt_cancel", "date and time")
+def f7_dt_cancel(sim, rep):
+    """input_datetime.event: up makes the year 2027, select moves to the month, back returns to the year
+    (still editing), back on the first field cancels - nothing is sent and the card still shows
+    2026-12-24 18:00."""
+    m = sim.mock
+    crash_mark = sim.crash_mark()
+    since, launched = dt_fresh(sim, m)
+    rep.check(wait_dt_entities(sim, m), "the date/time entities were imported")
+    goto(sim, DT_EVENT)
+    ok, txt = wait_card(sim, ["2026", "12", "24", "18", "00"])
+    rep.check(ok, "the card shows input_datetime.event as 2026-12-24 18:00", repr(txt))
+
+    mark = time.time()
+    if not open_editor(sim, rep, ["2026", "12", "24", "18", "00"], "the editor opens at 2026-12-24 18:00"):
+        return
+    year = active_box(sim)
+    sim.key("up")
+    ok, txt = wait_editor(sim, ["2027"])
+    rep.check(ok, "up on the year: 2027", repr(txt))
+    sim.select()
+    month = active_box(sim)
+    rep.check(year is not None and month is not None and month["cx"] > year["cx"],
+              "select moves to the month", f"{box_str(year)} -> {box_str(month)}")
+    rep.shot("editor-2027-month")
+
+    sim.back()
+    back1 = active_box(sim)
+    rep.check(editor_open(sim), "back on the month stays in the editor")
+    rep.check(back1 is not None and month is not None and back1["cx"] < month["cx"],
+              "and makes the year active again", f"{box_str(month)} -> {box_str(back1)}")
+    ok, txt = wait_editor(sim, ["2027"])
+    rep.check(ok, "the edited year is still 2027", repr(txt))
+    rep.shot("editor-back-to-year")
+
+    sim.back()
+    time.sleep(1.5)
+    rep.check(not editor_open(sim), "back on the first field leaves the editor")
+    no_service_call(rep, m, mark, "when the editor is cancelled")
+    ok, txt = wait_card(sim, ["2026", "12", "24", "18", "00"], absent=["2027"])
+    rep.check(ok, "the card still shows 2026-12-24 18:00", repr(txt))
+    rep.check(m.state("input_datetime.event") == "2026-12-24 18:00:00", "the mock's state is unchanged",
+              m.state("input_datetime.event"))
+    rep.shot("card-after-cancel")
+
+    # The year stops at 1970.  Holding down repeats the step (after 400 ms, then every 150 ms, at most
+    # 60 times): 61 steps from 2026 would end at 1965 without the clamp.
+    if not open_editor(sim, rep, ["2026", "12", "24"], "the editor opens again at 2026-12-24"):
+        return
+    sim.key("down", hold_ms=11000, settle=1.0)
+    ok, txt = wait_editor(sim, ["1970"], absent=["1969", "1965"])
+    rep.check(ok, "holding down on the year stops at 1970 (the lower clamp, nothing wraps)", repr(txt))
+    rep.shot("editor-year-1970")
+    sim.back()
+    time.sleep(1.5)
+    rep.check(not editor_open(sim), "back on the year leaves the editor")
+    no_service_call(rep, m, mark, "after holding down on the year and leaving")
+    rep.check(m.state("input_datetime.event") == "2026-12-24 18:00:00", "the mock's state is still unchanged",
+              m.state("input_datetime.event"))
+    check_no_crash(rep, sim, crash_mark)
+
+
+@scenario("fenix7x", "f7_dt_hold_release", "date and time")
+def f7_dt_hold_release(sim, rep):
+    """Holding a button repeats the step, and the repeat ends on release.  On time.lunch's minute (00),
+    DOWN held for one second steps once on the press, again after 400 ms and then every 150 ms - through
+    the wrap to somewhere in 55..59.  The minute read right after the release and 1.5 s later is the
+    same.  Back twice leaves without sending anything."""
+    m = sim.mock
+    crash_mark = sim.crash_mark()
+    since, launched = dt_fresh(sim, m)
+    rep.check(wait_dt_entities(sim, m), "the date/time entities were imported")
+    mark = time.time()
+    if not open_editor(sim, rep, ["12", "00"], "the editor opens at 12:00"):
+        return
+    w = sim.display_size()[0]
+    sim.select()                          # hour -> minute
+    minute = active_box(sim)
+    rep.check(minute is not None and minute["cx"] > w / 2, "the minute is the active field", box_str(minute))
+
+    sim.key("down", hold_ms=1000, settle=0.0)
+    first = rep.shot("right-after-release")
+    time.sleep(1.5)
+    second = rep.shot("1.5s-later")
+    img1, img2 = Image.open(first).convert("RGB"), Image.open(second).convert("RGB")
+    t1, t2 = time_row_digits(sim, img1), time_row_digits(sim, img2)
+    m1, m2 = _minute_of(t1), _minute_of(t2)
+    # Unchanged pixels in the active field prove it without OCR; the readings are the detail.
+    box, diff = active_box(sim, img1), None
+    if box:
+        x0, y0, x1, y1 = box["bbox"]
+        a1 = np.asarray(img1.convert("L"), dtype=int)[y0:y1, x0:x1]
+        a2 = np.asarray(img2.convert("L"), dtype=int)[y0:y1, x0:x1]
+        diff = float(np.abs(a1 - a2).mean())
+    rep.check(diff is not None and diff < 2.0 and m1 == m2, "the minute right after the release is still the "
+              "minute 1.5 s later (the repeat stops on release)", f"{t1!r} then {t2!r}, pixel difference {diff}")
+    rep.check(m2 is not None and 55 <= m2 <= 59, "DOWN held for 1 s went from 00 through the wrap to 55..59 "
+              "(a step on the press, a repeat after 400 ms, then every 150 ms)", f"minute {m2}")
+    rep.check(re.match(r"\s*12\s*:", t2) is not None, "the hour is still 12 (nothing carries)", repr(t2))
+
+    sim.back()                            # minute -> hour
+    sim.back()                            # hour, the first field: leave
+    time.sleep(1.5)
+    rep.check(not editor_open(sim), "back twice leaves the editor")
+    no_service_call(rep, m, mark, "after the hold and back")
+    check_no_crash(rep, sim, crash_mark)
+
+
+@scenario("fenix7x", "f7_dt_offline_mode", "date and time")
+def f7_dt_offline_mode(sim, rep):
+    """The stored values carry an offline launch: group.datetime is imported with the phone, then the
+    same build is launched again without it (storage kept).  datetime.launch's card still reads
+    2026-11-01 14:30 (local), and input_datetime.alarm's editor shows only the time row at 06:30 - no
+    year anywhere.  Back leaves; nothing is sent.
+
+    The dtwifi build (Wi-Fi/LTE execution on): there the wait for the phone runs without a loader, so the
+    stored entities are on screen offline.  With the plain build "Waiting for connection" covers them,
+    and back on it closes the widget on every build tested (see f7_wait_back_to_stored).
+    Switches the phone off in the middle - kept after the scenarios that need it on."""
+    m = sim.mock_https
+    crash_mark = sim.crash_mark()
+    exp = launch_expectations()
+    wall = exp["wall"]
+    since, launched = dt_fresh(sim, m, "dtwifi")
+    rep.check(wait_dt_entities(sim, m), "the date/time entities were imported with the phone connected")
+
+    sim.set_ble("Not Connected")
+    since = time.time()
+    sim.push(f"{VARIANTS}/dtwifi-{sim.device}.prg", fresh_settings=True, fresh_storage=False)
+    rep.check(sim.launch(), "the widget opened again, without the phone")
+    time.sleep(2)
+    rep.shot("offline-launch")
+    ok, txt = wait_card(sim, ["lunch", "12", "00"])
+    rep.check(ok, "offline, the stored entities are shown: time.lunch at 12:00", repr(txt))
+
+    goto(sim, DT_LAUNCH)
+    ok, txt = wait_card(sim, [f"{wall:%Y}", f"{wall:%m}", f"{wall:%d}", f"{wall:%H}", f"{wall:%M}"])
+    rep.check(ok, f"datetime.launch still reads {wall:%Y-%m-%d %H:%M} (local) offline", repr(txt))
+    rep.shot("launch-card-offline")
+
+    log_mark = sim.log_mark()
+    sim.next_page()                       # input_datetime.alarm
+    time.sleep(1.5)
+    if not open_editor(sim, rep, ["06", "30"], "input_datetime.alarm's editor opens at the stored 06:30"):
+        return
+    txt = editor_text(sim)
+    rep.check(re.search(r"(19|20)\d\d", txt) is None, "only the time row: no year anywhere on the editor",
+              repr(txt))
+    rep.shot("alarm-editor-offline")
+    sim.back()                            # the hour is the first field: leave
+    time.sleep(1.5)
+    rep.check(not editor_open(sim), "back leaves the editor")
+    sent = sim.log_since(log_mark)
+    rep.check(re.search(r"^(POST|GET|REQUEST): ", sent, re.M) is None,
+              "nothing was sent: no request in the app log", repr(sent[-200:]))
+    rep.check(not m.requests(since), "and nothing reached Home Assistant", f"{len(m.requests(since))} requests")
+    check_no_crash(rep, sim, crash_mark)
+
+
+@scenario("fenix7x", "f7_dt_time_12h", "date and time")
+def f7_dt_time_12h(sim, rep):
+    """The 12-hour clock (the simulator's default; the other scenarios pin the 24-hour one): time.lunch
+    shows as 12:00 PM and the editor has an AM/PM field of its own, the last one.  Down on the hour
+    stays in the same half of the day (12 PM -> 11 PM), up on AM/PM switches halves (11 AM), and select
+    there sends time/set_value {"time": "11:00:00"}.  (Beyond the requested list.)"""
+    m = sim.mock
+    crash_mark = sim.crash_mark()
+    since, launched = dt_fresh(sim, m, clock="12")
+    rep.check(wait_dt_entities(sim, m), "the date/time entities were imported")
+    ok, txt = wait_card(sim, ["12", "00", "PM"])
+    rep.check(ok, "the card shows time.lunch as 12:00 PM", repr(txt))
+
+    mark = time.time()
+    if not open_editor(sim, rep, ["12", "00", "PM"], "the editor opens at 12:00 PM"):
+        return
+    w = sim.display_size()[0]
+    hour = active_box(sim)
+    rep.check(hour is not None and hour["cx"] < w / 2, "the hour is the active field", box_str(hour))
+    rep.shot("editor-open")
+    sim.key("down")
+    ok, txt = wait_editor(sim, ["11", "00", "PM"])
+    rep.check(ok, "down on 12 PM gives 11 PM - the hour stays in the same half of the day", repr(txt))
+    sim.select()                      # hour -> minute
+    minute = active_box(sim)
+    sim.select()                      # minute -> AM/PM
+    ampm = active_box(sim)
+    rep.check(minute is not None and ampm is not None and ampm["cx"] > minute["cx"] + 0.05 * w,
+              "select on the minute moves on to the AM/PM field", f"{box_str(minute)} -> {box_str(ampm)}")
+    no_service_call(rep, m, mark, "when select reaches AM/PM (on this clock the minute is not the last field)")
+    sim.key("up")
+    ok, txt = wait_editor(sim, ["11", "00", "AM"])
+    rep.check(ok, "up on AM/PM: 11:00 AM", repr(txt))
+    rep.shot("editor-11-00-am")
+    sim.select()
+    call = m.wait_request(r"^/api/services/time/set_value$", timeout=10, since=mark, method="POST")
+    rep.check(call is not None, "select on AM/PM (the last field) sends time/set_value",
+              f"calls: {services_called(m, mark)}")
+    check_body(rep, call, {"entity_id": "time.lunch", "time": "11:00:00"},
+               'the body is exactly {"time": "11:00:00"} - 24-hour, whatever the display')
+    time.sleep(1.5)
+    ok, txt = wait_card(sim, ["11", "00", "AM"], timeout=10)
+    rep.check(ok, "the card shows 11:00 AM", repr(txt))
+    rep.shot("card-after")
+    check_no_crash(rep, sim, crash_mark)
+
+
+@scenario("fenix7x", "f7_dt_wifi_offer", "date and time")
+def f7_dt_wifi_offer(sim, rep):
+    """Without the phone and with Wi-Fi/LTE execution on, confirming the editor asks the Wi-Fi/LTE?
+    question first, with the value to be sent (14:05) on its second line; Cancel sends nothing.
+
+    Flaky by nature: the phone is switched off while the widget runs, and the simulator's Settings menu
+    does not always take at that moment (the README's known limitation) - a failure before the question
+    shows needs a retry before it means anything.  Kept last among the fenix 7X scenarios."""
+    m = sim.mock_https
+    crash_mark = sim.crash_mark()
+    since, launched = dt_fresh(sim, m, "dtwifi")
+    rep.check(launched, "the widget opened")
+    rep.check(wait_dt_entities(sim, m), "the entities were imported over https with the phone connected")
+    sim.set_ble("Not Connected")
+    time.sleep(1.5)
+
+    mark = time.time()
+    if not open_editor(sim, rep, ["12", "00"], "the editor opens without the phone"):
+        return
+    for _ in range(2):
+        sim.key("up", settle=0.5)     # 14:00
+    sim.select()                      # hour -> minute
+    for _ in range(5):
+        sim.key("up", settle=0.4)     # 14:05
+    ok, txt = wait_editor(sim, ["14", "05"])
+    rep.check(ok, "edited to 14:05 without the phone", repr(txt))
+    sim.select()                      # confirm on the last field
+    ok, txt = sim.wait_text(r"wi-?\s*fi|lte", timeout=10)
+    rep.shot("wifi-question")
+    rep.check(ok, "confirming asks the Wi-Fi/LTE? question instead of sending", repr(txt))
+    rep.check(_has(txt, "14") and _has(txt, "05"), "the question shows the value to be sent, 14:05 "
+              "(Wi-Fi/LTE? on the first line, the value on the second)", repr(txt))
+    no_service_call(rep, m, mark, "while the question is open")
+    sim.confirm(False)
+    time.sleep(2)
+    no_service_call(rep, m, mark, "when the Wi-Fi/LTE question is cancelled")
+    rep.shot("after-cancel")
+    check_no_crash(rep, sim, crash_mark)
+
+
+# ============================================================================ venusq2: date and time
+@scenario("venusq2", "vq_dt_touch", "date and time")
+def vq_dt_touch(sim, rep):
+    """Touch, on a watch without up/down: select opens time.lunch; two taps on the "+" band give 14:00,
+    a tap on the active hour moves to the minute, five taps give 14:05, a tap on the active minute sends
+    time/set_value {"time": "14:05:00"}."""
+    _dt_time_touch(sim, rep)
+
+
+@scenario("venusq2", "vq_dt_touch_field_tap", "date and time")
+def vq_dt_touch_field_tap(sim, rep):
+    """Touch: a tap on an inactive field makes it the active one without sending anything, the "-" band
+    counts down (minute 00 wraps to 59, the hour stays), and a tap on the active last field confirms:
+    time.lunch 12:00 -> 12:59.  (Beyond the requested list: covers tap-a-field and the "-" band.)"""
+    m = sim.mock
+    crash_mark = sim.crash_mark()
+    since, launched = dt_fresh(sim, m)
+    rep.check(wait_dt_entities(sim, m), "the date/time entities were imported")
+    w, h = sim.display_size()
+    minus = (w // 2, int(h * (1 - ZONE_FRACTION / 2)))
+    mark = time.time()
+    if not open_editor(sim, rep, ["12", "00"], "select opens time.lunch at 12:00"):
+        return
+    hour = active_box(sim)
+    rep.check(hour is not None and hour["cx"] < w / 2, "the hour is active", box_str(hour))
+    cy = hour["cy"] if hour else h / 2
+    point = field_point(sim, 0.8, cy, (hour["h"] / 2) if hour else h * 0.05) or (w / 2 + 0.12 * w, cy)
+    rep.shot("editor-open")
+
+    sim.tap(int(point[0]), int(point[1]))
+    minute = active_box(sim)
+    rep.check(minute is not None and hour is not None and minute["cx"] > hour["cx"] + 0.05 * w,
+              "a tap on the minute makes it the active field", f"tap {point}: {box_str(hour)} -> {box_str(minute)}")
+    no_service_call(rep, m, mark, "after tapping an inactive field")
+    sim.tap(*minus)
+    ok, txt = wait_editor(sim, ["12", "59"])
+    rep.check(ok, "a tap on the - band: minute 00 wraps to 59, the hour stays 12", repr(txt))
+    rep.shot("editor-12-59")
+
+    tap_box(sim, active_box(sim) or minute, point)
+    call = m.wait_request(r"^/api/services/time/set_value$", timeout=10, since=mark, method="POST")
+    rep.check(call is not None, "a tap on the active minute (the last field) sends time/set_value",
+              f"calls: {services_called(m, mark)}")
+    check_body(rep, call, {"entity_id": "time.lunch", "time": "12:59:00"},
+               'the body is exactly {"time": "12:59:00"}')
+    time.sleep(1.5)
+    ok, txt = wait_card(sim, ["12", "59"], timeout=10)
+    rep.check(ok, "the card shows 12:59", repr(txt))
+    rep.shot("card-after")
+    check_no_crash(rep, sim, crash_mark)
+
+
+# ============================================================================ edge1040: date and time
+@scenario("edge1040", "e10_dt_touch", "date and time")
+def e10_dt_touch(sim, rep):
+    """The Edge has neither up/down nor a select button: a tap on the card opens time.lunch, then the
+    same touch flow as on the Venu Sq 2 (12:00 -> 14:05, time/set_value {"time": "14:05:00"})."""
+    _dt_time_touch(sim, rep)
+
+
+# ============================================================================ fr255: date and time
+@scenario("fr255", "fr_dt_buttons", "date and time")
+def fr_dt_buttons(sim, rep):
+    """The f7_dt_time_buttons flow on a watch without a touchscreen: up twice, select, up five times,
+    select sends time/set_value {"time": "14:05:00"}."""
+    _dt_time_buttons(sim, rep)
+
+
+# ============================================================================ 64 KB: date and time
+@scenario("instinct2x", "i2_dt_readonly", "date and time")
+def i2_dt_readonly(sim, rep):
+    """64 KB: time.lunch is imported over https and shown read-only - selecting it sends nothing and
+    does not crash, and memory stays within the budget."""
+    _dt_readonly(sim, rep)
+
+
+@scenario("vivoactive3", "va3_dt_readonly", "date and time")
+def va3_dt_readonly(sim, rep):
+    """64 KB on Connect IQ 3.1.6: time.lunch is imported over https and shown read-only - selecting it
+    sends nothing and does not crash, and memory stays within the budget."""
+    _dt_readonly(sim, rep)
+
+
+# ============================================================================ back on a loader
+def _screen_text(sim, img):
+    """OCR of the whole display plus, sparse-text, of its middle band at two sizes: the Venu Sq 2's
+    loader ("Turning off" in a frame, a busy block sweeping over it) reads as nothing at all otherwise."""
+    w, h = sim.display_size()
+    band = img.crop((0, int(h * 0.3), w, int(h * 0.7)))
+    return "\n".join([sim.ocr(img)] + [sim.ocr(band, scale=s, psm=11) for s in (2, 3)])
+
+
+def _loader_showing(sim, img, card_img, card_word):
+    """Is a loader in front of the card?  The widget runs, the card's text is gone, and either a word of
+    the loader is read or the screen clearly differs from the card.  Returns (bool, detail)."""
+    txt = _screen_text(sim, img)
+    a = np.asarray(img.convert("L"), dtype=int)
+    b = np.asarray(card_img.convert("L"), dtype=int)
+    diff = float(np.abs(a - b).mean())
+    word = re.search(r"tur|ning|toggl|\boff\b", txt, re.I) is not None
+    card = re.search(card_word, txt, re.I) is not None
+    ok = not no_app(img) and not card and (word or diff > 8.0)
+    return ok, f"{txt!r}, differs from the card by {diff:.1f}"
+
+
+def _loader_back(sim, rep, delay, tap_first=False):
+    """Back on a toggle's loader: light.kitchen (on) is turned off while the mock answers `delay` seconds
+    late.  Back while "Turning off" shows must take the loader down and leave the card and the widget;
+    when the POST completes, nothing else may be popped - the card is still there, with the new state.
+    With tap_first a tap on the showing loader comes first, and must do nothing.
+
+    The screenshots are taken at each moment and read afterwards, so that the presses stay well inside
+    the delay: a back that came after the loader had gone by itself would leave the widget instead."""
+    m = sim.mock_http
+    crash_mark = sim.crash_mark()
+    since, launched = fresh(sim, m, "base")
+    rep.check(launched, "the widget opened")
+    rep.check(wait_entities(sim, m), "the entities were imported")
+    time.sleep(1.5)
+    for _ in range(2):
+        sim.next_page()                   # light.kitchen
+    time.sleep(1.5)
+    ok, txt = sim.wait_text(r"kitchen", timeout=6)
+    if not rep.check(ok, "the card shows light.kitchen (on)", repr(txt)):
+        snap(sim, rep, "wrong-card")
+        return
+    before = snap(sim, rep, "card-before")
+    w, h = sim.display_size()
+    m.delay(delay)
+    try:
+        mark = time.time()
+        sim.select()                      # turn_off; answered `delay` s later
+        shown = snap(sim, rep, "loader-shown")
+        after_tap = None
+        if tap_first:
+            sim.tap(w // 2, h // 2, settle=0.4)
+            after_tap = snap(sim, rep, "after-tap-on-loader")
+        sim.key("esc", settle=0.5)        # back
+        after_back = snap(sim, rep, "after-back")
+        back_at = time.time()
+
+        ok, detail = _loader_showing(sim, shown, before, r"kitchen")
+        rep.check(ok, "selecting shows the loader ('Turning off') in front of the card", detail)
+        if tap_first:
+            ok, detail = _loader_showing(sim, after_tap, before, r"kitchen")
+            rep.check(ok, "a tap on the loader does nothing: it is still there", detail)
+        t_back = sim.ocr(after_back)
+        call = m.wait_request(r"^/api/services/light/turn_off$", timeout=5, since=mark, method="POST")
+        rep.check(call is not None and back_at < call["ts"] + delay,
+                  "back came while the request was still unanswered",
+                  f"back {round(back_at - call['ts'], 2) if call else None} s after the request, answer after {delay} s")
+        rep.check(not no_app(after_back), "after back the widget is still running")
+        rep.check(re.search(r"turn|toggl", t_back, re.I) is None, "back takes the loader down", repr(t_back))
+        rep.check(re.search(r"kitchen", t_back, re.I) is not None, "and the card is there underneath",
+                  repr(t_back))
+
+        if call:
+            time.sleep(max(0.0, call["ts"] + delay + 2.5 - time.time()))   # the response and its redraw
+        final = snap(sim, rep, "after-the-response")
+        t_final = sim.ocr(final)
+        rep.check(not no_app(final) and re.search(r"kitchen", t_final, re.I) is not None,
+                  "when the POST has completed, the card is still there - nothing else was popped", repr(t_final))
+        a = np.asarray(before.convert("L"), dtype=int)
+        b = np.asarray(final.convert("L"), dtype=int)
+        icon = (slice(int(h * 0.1), int(h * 0.45)), slice(int(w * 0.3), int(w * 0.7)))
+        diff = float(np.abs(a[icon] - b[icon]).mean())
+        rep.check(diff > 3.0, "and it shows the new state (the light's icon changed)", f"mean pixel difference {diff:.1f}")
+        rep.check(m.state("light.kitchen") == "off", "Home Assistant (the mock) turned the light off",
+                  m.state("light.kitchen"))
+        check_no_crash(rep, sim, crash_mark)
+    finally:
+        m.delay(0)
+
+
+@scenario("fenix7x", "f7_loader_back", "loader back")
+def f7_loader_back(sim, rep):
+    """Back on a toggle's loader (LoaderDelegate): with the mock answering 3 s late, turning off
+    light.kitchen and pressing back while "Turning off" shows takes the loader down and leaves the card;
+    the response a few seconds later pops nothing else, and the card shows the new state."""
+    _loader_back(sim, rep, delay=3)
+
+
+@scenario("venusq2", "vq_loader_back", "loader back")
+def vq_loader_back(sim, rep):
+    """As f7_loader_back, on a touch screen: first a tap on the showing loader, which must do nothing,
+    then back.  The mock answers 5 s late here - the tap and its screenshot need the extra time before
+    the back."""
+    _loader_back(sim, rep, delay=5, tap_first=True)

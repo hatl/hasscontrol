@@ -47,7 +47,9 @@ APPS = "/tmp/com.garmin.connectiq/GARMIN/APPS"
 CRASH_LOG = APPS + "/LOGS/CIQ_LOG.YML"
 INI = os.path.expanduser("~/.Garmin/ConnectIQ/simulator.ini")
 DEVICES = os.path.expanduser("~/.Garmin/ConnectIQ/Devices")
-VARIANTS = S + "/variants2"
+# Where the .prg builds are taken from; CIQ_VARIANTS points a run at another set of builds (one directory
+# per source revision), without the scenarios having to know.
+VARIANTS = os.environ.get("CIQ_VARIANTS") or S + "/variants2"
 MOCK_HTTP = "http://127.0.0.1:8123"
 MOCK_HTTPS = "https://127.0.0.1:8124"
 MENUBAR_X = {"File": 18, "Settings": 72, "Simulation": 147, "Data Fields": 231, "adb Connection": 330, "Help": 411}
@@ -127,6 +129,10 @@ class Mock:
     def fail(self, code, count=1):
         return self._call("/_test/fail", {"code": code, "count": count})
 
+    def delay(self, seconds):
+        """Answer every /api/ request `seconds` later (0 clears it, as does reset())."""
+        return self._call("/_test/delay", {"seconds": seconds})
+
     def wait_request(self, pattern, timeout=15, since=0.0, method=None):
         """Wait until a request whose path matches `pattern` (regex) arrived after `since`."""
         end = time.time() + timeout
@@ -154,6 +160,11 @@ class Sim:
         self._win = None
         self._origin = None
         self.notes = []
+        # The phone state this harness last set: by start() (ini) or a set_connection() that went through.
+        # None when unknown.  run.py skips its reset when it is already "Connected" - every trip through
+        # the Settings menu risks the simulator's GTK crash (SIGSEGV in gtk_widget_get_parent under
+        # gtk_menu_popup_at_widget, seen five times in long sessions).
+        self.ble_state = None
 
     # ------------------------------------------------------------------ X11
     @property
@@ -652,14 +663,16 @@ class Sim:
         time.sleep(0.5)
 
     def close_menus(self):
-        """Dismiss any open menu: Escape a few times, then click far away from everything."""
-        for _ in range(4):
-            try:
-                self.xkey("Escape", settle=0.15)
-            except Exception:
-                break
-        self.click_root(1300, 950)
-        time.sleep(0.3)
+        """Dismiss any open menu by clicking far away from everything (outside the simulator window),
+        twice in case a submenu was open.
+
+        No Escape key: with no menu open, XTEST keys do reach the device - the first Escape only takes
+        the focus, the second arrives as BACK, and BACK on the entity view closes the widget.  This
+        ran before every Settings > Connection Type change, so switching the phone while the widget
+        ran closed it (the "known limitation" of the phone-changing scenarios)."""
+        for _ in range(2):
+            self.click_root(1300, 950)
+            time.sleep(0.3)
 
     CONNECTION_STATES = ["Not Initialized", "Not Connected", "Connected"]
 
@@ -683,22 +696,33 @@ class Sim:
                 row = ble if kind == "BLE" else (ble[0], ble[1] + self.MENU_ROW_HEIGHT)
                 self.move(*row)
                 time.sleep(1.2)
-                # the states open in a column to the right of the row being hovered
+                # the states open in a column to the right of the row being hovered.  Only words
+                # count: OCR also returns the submenu's ">" arrow, a pixel off the first state's
+                # line - as a row of its own it shifted every index by one, and "Connected"
+                # clicked "Not Connected" (seen on the Venu Sq 2).  Boxes within 8 px are one row.
                 boxes = [(y, x) for t, x, y, w, h in self._ocr_boxes(self.root_shot())
-                         if x > ble[0] + 80 and row[1] - 60 < y < row[1] + 110]
-                ys = sorted({y for y, _ in boxes})
+                         if x > ble[0] + 80 and row[1] - 60 < y < row[1] + 110
+                         and re.search(r"[A-Za-z]{3}", t)]
+                ys = []
+                for y in sorted({y for y, _ in boxes}):
+                    if not ys or y - ys[-1] > 8:
+                        ys.append(y)
                 if len(ys) < 3:
                     raise RuntimeError(f"the {kind} states did not open (found {len(ys)} rows)")
-                x = min(x for y, x in boxes if y == ys[index])
+                x = min(x for y, x in boxes if abs(y - ys[index]) <= 8)
                 self.click_root(x + 30, ys[index])
                 time.sleep(0.8)
                 log(f"{kind} -> {state}")
+                if kind == "BLE":
+                    self.ble_state = state
                 return
             except RuntimeError as e:
                 last = e
                 log(f"{kind} -> {state} failed ({e}); attempt {attempt + 1} of {attempts}")
                 self.close_menus()
                 time.sleep(1.0)
+        if kind == "BLE":
+            self.ble_state = None
         self.shot(f"connection-menu-{kind}", full=True)
         raise RuntimeError(f"could not set {kind} to {state}: {last}")
 
@@ -848,6 +872,7 @@ class Sim:
             raise RuntimeError("simulator did not come up (port 1234 never opened)")
         time.sleep(2.5)
         self._origin = None
+        self.ble_state = "Connected"          # BleState=2, written above
         # The title names the device only once an app has been pushed, so it is checked in push().
         log(f"simulator up: {self.window_title()}")
         return self

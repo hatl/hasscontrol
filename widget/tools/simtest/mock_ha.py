@@ -6,7 +6,8 @@ usage: mock_ha.py [--port 8123] [--token TESTTOKEN] [--delay 0.0] [--logfile moc
 
 Endpoints (HA-compatible):
   GET  /api/states/<entity_id>            -> state object (404 if unknown); group.* carries attributes.entity_id
-  POST /api/services/<domain>/<service>   -> applies the action, returns []
+  POST /api/services/<domain>/<service>   -> applies the action, returns [] (the date/time services below
+                                             return the changed state, as Home Assistant does)
   POST /api/states/<entity_id>            -> upsert (battery report)
   POST /auth/token                        -> OAuth token response (any code/refresh token accepted)
 Control endpoints (no auth):
@@ -15,9 +16,105 @@ Control endpoints (no auth):
   POST /_test/fail     -> body {"code": 401, "count": 1}: the next <count> API requests fail with <code>
   GET  /_test/state    -> all entity states
   POST /_test/set      -> body {"entity_id": ..., "state": ...}: force a state (e.g. to simulate an external change)
+  POST /_test/delay    -> body {"seconds": 3}: every /api/ request is answered that much later (0 clears it;
+                          /_test/reset clears it too) - keeps a loader on screen
+Every log entry also carries the HTTP "status" the mock answered with.
+
+Groups: group.garmin (the original fixture - its order is what the older scenarios navigate by) and
+group.datetime (time.lunch, date.deadline, datetime.launch, input_datetime.alarm/.vacation/.event).
+
+Date and time services, validated the way Home Assistant validates them (400 on bad service data):
+  time.set_value {"time"}, date.set_value {"date"}, datetime.set_value {"datetime"} (stored exactly as sent),
+  input_datetime.set_datetime {"date"} | {"time"} | {"datetime"} - only the keys the entity has
+  (has_date/has_time); "datetime" needs both and cannot be combined with the others.
+  Missing or unknown keys -> 400 (HA's entity service schemas allow no extra keys).  An entity id of
+  another domain is ignored with 200 and nothing changed, as HA does.
 """
-import argparse, json, threading, time, sys, copy, os
+import argparse, json, threading, time, sys, copy, os, re
+import datetime as _dt
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+
+class BadRequest(Exception):
+    """Service data Home Assistant refuses with 400."""
+
+
+def _parse_date(value):
+    # HA: cv.date -> dt_util.parse_date(), strptime("%Y-%m-%d")
+    try:
+        return _dt.datetime.strptime(str(value), "%Y-%m-%d").date()
+    except ValueError:
+        raise BadRequest(f"Invalid date specified: {value!r}")
+
+
+def _parse_time(value):
+    # HA: cv.time -> dt_util.parse_time(), "HH:MM" or "HH:MM:SS"
+    parts = str(value).split(":")
+    try:
+        if len(parts) not in (2, 3):
+            raise ValueError
+        return _dt.time(*(int(p) for p in parts))
+    except ValueError:
+        raise BadRequest(f"Invalid time specified: {value!r}")
+
+
+def _parse_datetime(value):
+    # HA: cv.datetime -> dt_util.parse_datetime(): ISO 8601 with "T" or " ", optional offset.  A bare
+    # date is refused here (HA would read it as midnight) - nothing the widget sends looks like that.
+    s = str(value)
+    try:
+        if not re.match(r"^\d{4}-\d{1,2}-\d{1,2}[T ]\d{1,2}:\d{2}", s):
+            raise ValueError
+        return _dt.datetime.fromisoformat(s)
+    except ValueError:
+        raise BadRequest(f"Invalid datetime specified: {value!r}")
+
+
+def _input_datetime_value(state, has_date, has_time):
+    """The naive datetime behind an input_datetime state (now, if the state is not one)."""
+    try:
+        if has_date and has_time:
+            return _dt.datetime.strptime(state, "%Y-%m-%d %H:%M:%S")
+        if has_date:
+            return _dt.datetime.strptime(state, "%Y-%m-%d")
+        return _dt.datetime.combine(_dt.date(1970, 1, 1), _dt.datetime.strptime(state, "%H:%M:%S").time())
+    except (TypeError, ValueError):
+        return _dt.datetime.now().replace(microsecond=0)
+
+
+def _input_datetime_state(value, has_date, has_time):
+    if has_date and has_time:
+        return value.strftime("%Y-%m-%d %H:%M:%S")
+    return value.strftime("%Y-%m-%d") if has_date else value.strftime("%H:%M:%S")
+
+
+def _input_datetime_attrs(value, has_date, has_time):
+    """The attributes HA's input_datetime reports alongside its state (local time zone)."""
+    attrs = {"has_date": has_date, "has_time": has_time, "editable": True}
+    if has_date:
+        attrs.update(year=value.year, month=value.month, day=value.day)
+    if has_time:
+        attrs.update(hour=value.hour, minute=value.minute, second=value.second)
+    if not has_date:
+        attrs["timestamp"] = value.hour * 3600 + value.minute * 60 + value.second
+    elif not has_time:
+        attrs["timestamp"] = _dt.datetime.combine(value.date(), _dt.time()).timestamp()
+    else:
+        attrs["timestamp"] = value.timestamp()
+    return attrs
+
+
+def _input_datetime(name, state, has_date, has_time):
+    value = _input_datetime_value(state, has_date, has_time)
+    return {"state": state, "attributes": {"friendly_name": name, **_input_datetime_attrs(value, has_date, has_time)}}
+
+
+# The data keys each date/time service takes besides entity_id.
+DT_SERVICES = {("time", "set_value"): {"time"}, ("date", "set_value"): {"date"},
+               ("datetime", "set_value"): {"datetime"},
+               ("input_datetime", "set_datetime"): {"date", "time", "datetime"}}
+DT_DOMAINS = {d for d, _ in DT_SERVICES}
+
 
 FIXTURE = {
     "group.garmin": {"state": "on", "attributes": {"friendly_name": "Garmin", "entity_id": [
@@ -39,6 +136,16 @@ FIXTURE = {
     "fan.bedroom": {"state": "off", "attributes": {"friendly_name": "Bedroom fan"}},
     "valve.water": {"state": "open", "attributes": {"friendly_name": "Water valve"}},
     "input_boolean.guest": {"state": "off", "attributes": {"friendly_name": "Guest mode"}},
+    # A group of its own for the date and time entities, so group.garmin keeps its order.
+    "group.datetime": {"state": "on", "attributes": {"friendly_name": "Date and time", "entity_id": [
+        "time.lunch", "date.deadline", "datetime.launch", "input_datetime.alarm", "input_datetime.vacation",
+        "input_datetime.event"]}},
+    "time.lunch": {"state": "12:00:00", "attributes": {"friendly_name": "Lunch"}},
+    "date.deadline": {"state": "2026-01-31", "attributes": {"friendly_name": "Deadline"}},
+    "datetime.launch": {"state": "2026-11-01T13:30:00+00:00", "attributes": {"friendly_name": "Launch"}},
+    "input_datetime.alarm": _input_datetime("Alarm", "06:30:00", has_date=False, has_time=True),
+    "input_datetime.vacation": _input_datetime("Vacation", "2026-07-01", has_date=True, has_time=False),
+    "input_datetime.event": _input_datetime("Event", "2026-12-24 18:00:00", has_date=True, has_time=True),
 }
 
 class Store:
@@ -50,7 +157,7 @@ class Store:
         # fixture - that leaked state from one test scenario into the next.
         with self.lock:
             self.generation += 1
-            self.states = copy.deepcopy(FIXTURE); self.log = []; self.fail = None
+            self.states = copy.deepcopy(FIXTURE); self.log = []; self.fail = None; self.delay = 0.0
     def record(self, entry):
         with self.lock: self.log.append(entry)
     def get(self, eid):
@@ -74,6 +181,8 @@ class Store:
             self.set(eid, final)
         threading.Thread(target=go, daemon=True).start()
     def service(self, domain, service, body):
+        if domain in DT_DOMAINS:
+            return self.datetime_service(domain, service, body)
         eid = (body or {}).get("entity_id")
         cur = self.get(eid)["state"] if eid and self.get(eid) else None
         if domain == "lock":
@@ -97,12 +206,63 @@ class Store:
         elif domain in ("scene", "script"):
             pass
         return []
+    def datetime_service(self, domain, service, body):
+        """time/date/datetime.set_value and input_datetime.set_datetime.  Raises BadRequest where HA
+        answers 400; returns the changed states, as HA's REST API does."""
+        allowed = DT_SERVICES.get((domain, service))
+        if allowed is None:
+            raise BadRequest(f"Service {domain}.{service} not found")
+        if not isinstance(body, dict) or not body.get("entity_id"):
+            raise BadRequest("must contain at least one of entity_id, device_id, area_id")
+        extra = set(body) - allowed - {"entity_id"}
+        if extra:
+            raise BadRequest(f"extra keys not allowed: {sorted(extra)}")
+        given = set(body) & allowed
+        if not given:
+            raise BadRequest(f"must contain at least one of {sorted(allowed)}")
+        eid = body["entity_id"]
+        with self.lock:
+            entity = copy.deepcopy(self.states.get(eid))
+        if entity is None or not str(eid).startswith(domain + "."):
+            # HA only calls an entity service on that domain's entities: any other id is ignored, and
+            # the call still answers 200 - with nothing changed.
+            return []
+        old, attrs = entity["state"], None
+        if domain == "time":
+            new = _parse_time(body["time"]).isoformat()
+        elif domain == "date":
+            new = _parse_date(body["date"]).isoformat()
+        elif domain == "datetime":
+            _parse_datetime(body["datetime"])
+            new = str(body["datetime"])          # stored exactly as sent (HA would convert it to UTC)
+        else:
+            has_date = bool(entity["attributes"].get("has_date"))
+            has_time = bool(entity["attributes"].get("has_time"))
+            if "datetime" in given and len(given) > 1:
+                raise BadRequest(f"Cannot use together: {', '.join(sorted(given))}")
+            if ("date" in given and not has_date) or ("time" in given and not has_time) \
+                    or ("datetime" in given and not (has_date and has_time)):
+                raise BadRequest(f"{eid} has_date={has_date} has_time={has_time} cannot take {sorted(given)}")
+            if "datetime" in given:
+                value = _parse_datetime(body["datetime"]).replace(tzinfo=None, microsecond=0)
+            else:
+                current = _input_datetime_value(old, has_date, has_time)
+                d = _parse_date(body["date"]) if "date" in given else current.date()
+                t = _parse_time(body["time"]) if "time" in given else current.time()
+                value = _dt.datetime.combine(d, t)
+            new = _input_datetime_state(value, has_date, has_time)
+            attrs = _input_datetime_attrs(value, has_date, has_time)
+        self.set(eid, new, attrs)
+        return [self.get(eid)] if new != old else []
 
 class Handler(BaseHTTPRequestHandler):
     store = None; token = None; delay = 0.0
     def log_message(self, fmt, *args):  # quiet
         pass
     def _send(self, code, obj=None):
+        entry = getattr(self, "_entry", None)
+        if entry is not None:
+            entry["status"] = code      # what the widget got back, for the scenario reports
         data = (json.dumps(obj) if obj is not None else "").encode()
         self.send_response(code); self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(data))); self.end_headers(); self.wfile.write(data)
@@ -116,12 +276,17 @@ class Handler(BaseHTTPRequestHandler):
     def _handle(self):
         body = self._body()
         auth = self._auth_ok()
-        self.store.record({"ts": round(time.time(), 3), "method": self.command, "path": self.path, "body": body, "auth": auth,
-                           "headers": {k: v for k, v in self.headers.items() if k.lower() in ("authorization", "x-custom-psk", "content-type")}})
+        # "status" exists from the start: _send() fills it in later, and adding a key then could break a
+        # /_test/log that is serialising this entry at that moment.
+        self._entry = {"ts": round(time.time(), 3), "method": self.command, "path": self.path, "body": body, "auth": auth,
+                       "headers": {k: v for k, v in self.headers.items() if k.lower() in ("authorization", "x-custom-psk", "content-type")},
+                       "status": None}
+        self.store.record(self._entry)
         sys.stdout.write(f"{time.strftime('%H:%M:%S')} {self.command} {self.path} auth={auth} body={body}\n"); sys.stdout.flush()
         if self.path.startswith("/_test/"):
             return self._control(body)
         if self.delay: time.sleep(self.delay)
+        if self.store.delay and self.path.startswith("/api/"): time.sleep(self.store.delay)
         if self.path == "/auth/token" and self.command == "POST":
             return self._send(200, {"access_token": self.token, "token_type": "Bearer", "refresh_token": "REFRESH", "expires_in": 1800})
         with self.store.lock:
@@ -141,15 +306,24 @@ class Handler(BaseHTTPRequestHandler):
                 self.store.set(parts[2], str((body or {}).get("state")), (body or {}).get("attributes"))
                 return self._send(200, self.store.get(parts[2]))
         if len(parts) == 4 and parts[0] == "api" and parts[1] == "services" and self.command == "POST":
-            return self._send(200, self.store.service(parts[2], parts[3], body))
+            try:
+                return self._send(200, self.store.service(parts[2], parts[3], body))
+            except BadRequest as e:
+                sys.stdout.write(f"{time.strftime('%H:%M:%S')}   -> 400 {e}\n"); sys.stdout.flush()
+                return self._send(400, {"message": str(e)})
         return self._send(404, {"message": "not found"})
     def _control(self, body):
-        if self.path == "/_test/log": return self._send(200, self.store.log)
+        if self.path == "/_test/log":
+            with self.store.lock: snapshot = list(self.store.log)
+            return self._send(200, snapshot)
         if self.path == "/_test/reset": self.store.reset(); return self._send(200, {"ok": True})
         if self.path == "/_test/state": return self._send(200, self.store.states)
         if self.path == "/_test/fail":
             with self.store.lock: self.store.fail = {"code": int(body.get("code", 500)), "count": int(body.get("count", 1))}
             return self._send(200, {"ok": True})
+        if self.path == "/_test/delay":
+            with self.store.lock: self.store.delay = max(0.0, float((body or {}).get("seconds", 0)))
+            return self._send(200, {"ok": True, "delay": self.store.delay})
         if self.path == "/_test/set":
             self.store.set(body["entity_id"], body["state"], body.get("attributes")); return self._send(200, {"ok": True})
         return self._send(404, {"message": "unknown control endpoint"})
