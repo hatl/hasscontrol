@@ -105,6 +105,7 @@ When adding a new entity type:
 - Support Garmin's glance mode for quick information display
 - Implement proper loading indicators for network operations
 - Show a loader only through `ViewController.showLoader()` (or `showLoaderWithDelegate()` with a delegate whose `onBack` calls `dismissLoader()`, as `ConnectionWait` does): a loader the system pops on back by itself leaves `_loaderActive` set, and the next removal then pops another view
+- A loader's delegate must never pop the loader on back: the system pops the `Ui.ProgressBar` by itself (verified in the simulator, even when `onBack()` returned true), so a pop of our own takes the view beneath as well. `LoaderDelegate` and `ConnectionWaitDelegate` only call `ViewController.loaderDismissedByBack()` and return false
 
 # Authentication
 - Support both OAuth and long-lived token authentication methods

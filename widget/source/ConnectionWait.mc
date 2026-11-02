@@ -124,10 +124,11 @@ class ConnectionWait {
 
   // Back on the loader: show the stored entities, keep waiting quietly.
   //
-  // Only while the loader is up: a fast double back, or a back still queued
-  // when onTick() has already taken the loader down, would otherwise pop a
-  // second view - the entity view, or the widget's base page, where
-  // popView() throws OperationNotAllowedException.
+  // Back on the loader. The system pops the Ui.ProgressBar by itself on
+  // back (see ViewController.loaderDismissedByBack()) - a pop of our own on
+  // top of it took the entity view too and closed the widget. So this only
+  // records that the loader is gone; the wait goes on quietly and still
+  // refreshes once the phone is back.
   function dismiss() {
     if (!_mLoaderShown) {
       return;
@@ -135,7 +136,7 @@ class ConnectionWait {
 
     _mDismissed = true;
     _mLoaderShown = false;
-    App.getApp().viewController.dismissLoader();
+    App.getApp().viewController.loaderDismissedByBack();
   }
 
   // Takes the loader down from here rather than from a back key the loader
@@ -160,6 +161,7 @@ class ConnectionWaitDelegate extends Ui.BehaviorDelegate {
   function onBack() {
     App.getApp().resetInactivityTimer();
     _mWait.dismiss();
-    return true;
+    // false: the system takes the bar down (see ConnectionWait.dismiss()).
+    return false;
   }
 }

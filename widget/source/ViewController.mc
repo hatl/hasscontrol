@@ -245,14 +245,15 @@ class ViewController {
 
   }
 
-  // Every loader gets a delegate whose back goes through dismissLoader(), so
-  // that _loaderActive never outlives it - see LoaderDelegate.
+  // Every loader gets a delegate whose back goes through
+  // loaderDismissedByBack(), so that _loaderActive never outlives it - see
+  // LoaderDelegate.
   function showLoader(text) {
     showLoaderWithDelegate(text, new LoaderDelegate());
   }
 
   // `delegate` handles input on the loader: showLoader()'s LoaderDelegate,
-  // or ConnectionWait's own. Either calls dismissLoader() on back.
+  // or ConnectionWait's own. Either calls loaderDismissedByBack() on back.
   function showLoaderWithDelegate(text, delegate) {
     // A delayed removal still pending belongs to the previous loader - left
     // to run it would close this one before its request has completed.
@@ -298,27 +299,17 @@ class ViewController {
     _loaderActive = null;
   }
 
-  // Back seen by the loader's own delegate (LoaderDelegate, or
-  // ConnectionWait's): the loader is the top view then, so it is popped
-  // whatever isShowingLoader() makes of the state. On both tiers, as every
-  // loader has such a delegate.
-  //
-  // Returns false without popping when _loaderActive is already null. That
-  // is a loader a removal could not pop because the login view sat on top
-  // of it (isShowingLoader() was false, so removeLoader() only cleared the
-  // flag) and that is on screen again now the login view is gone. The
-  // delegate then lets the system handle the back itself, which pops the
-  // loader - exactly what a loader without a delegate got.
-  function dismissLoader() {
+  // Back on a loader, as seen by its delegate (LoaderDelegate, or
+  // ConnectionWait's). The system pops the Ui.ProgressBar on back by itself
+  // - verified in the simulator: it did so even with a delegate whose
+  // onBack() returned true, and a pop of our own on top of it took the view
+  // beneath as well, closing the widget from the launch wait. So this only
+  // brings the bookkeeping in step; the delegates return false, which lets
+  // the system pop the bar wherever it does not do so unasked. On both
+  // tiers, as every loader has such a delegate.
+  function loaderDismissedByBack() {
     Scheduler.cancel(:loader);
-
-    if (_loaderActive == null) {
-      return false;
-    }
-
     _loaderActive = null;
-    Ui.popView(Ui.SLIDE_IMMEDIATE);
-    return true;
   }
 
   function showError(error) {

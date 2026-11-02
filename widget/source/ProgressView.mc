@@ -17,30 +17,18 @@ class ProgressView extends Ui.ProgressBar {
 // ViewController.showLoader()). Without a delegate the system pops a loader
 // on back without telling anyone: _loaderActive then outlived it, and the
 // next removal popped whatever was on top instead - an editor opened
-// meanwhile, say. Back now goes through ViewController.dismissLoader().
+// meanwhile, say. The system still pops the bar on back with a delegate in
+// place (see ViewController.loaderDismissedByBack()); this one just keeps
+// the bookkeeping in step and must not pop anything itself.
 class LoaderDelegate extends Ui.BehaviorDelegate {
-  // Set by the first back. The second of a fast double back can reach this
-  // delegate before the pop is done, and popping again would take off the
-  // view beneath (ConnectionWait.dismiss() guards against the same).
-  hidden var _mGone;
-
   function initialize() {
     BehaviorDelegate.initialize();
-    _mGone = false;
   }
 
   function onBack() {
-    if (_mGone) {
-      return true;
-    }
-
-    if (App.getApp().viewController.dismissLoader()) {
-      _mGone = true;
-      return true;
-    }
-
-    // Nothing to pop on our side (see dismissLoader()): leave the back to
-    // the system, as a loader without a delegate would.
+    App.getApp().viewController.loaderDismissedByBack();
+    // false: the system takes the bar down, as it does for a loader without
+    // a delegate.
     return false;
   }
 
