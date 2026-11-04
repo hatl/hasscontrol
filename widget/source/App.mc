@@ -127,6 +127,12 @@ class HassControlApp extends App.AppBase {
     ];
   }
 
+  // Edge devices switching between Day and Night mode: redraw so the glance
+  // text colour follows (see AppGlance.textColor).
+  function onNightModeChanged() {
+    Ui.requestUpdate();
+  }
+
   // Return the initial view of your application here
   function getInitialView() {
     Utils.logMem("init:0 enter", null);

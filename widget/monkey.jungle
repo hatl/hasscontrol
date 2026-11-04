@@ -15,25 +15,26 @@ project.typecheck = 0
 #   * EntityListView, leaving the classic EntityCardView (~4.1 KB)
 #
 # Verify with:  monkeyc ... -d instinct2x --build-stats 1 -r -O2
+# (:daynight is excluded here as well - see "Day / Night display mode" below.)
 base.excludeAnnotations = lowmem;daynight
 
-descentg1.excludeAnnotations = fullmem
-enduro.excludeAnnotations = fullmem
-fenix5.excludeAnnotations = fullmem
-fenix5s.excludeAnnotations = fullmem
-fenix6.excludeAnnotations = fullmem
-fenix6s.excludeAnnotations = fullmem
-fenixchronos.excludeAnnotations = fullmem
-fr245.excludeAnnotations = fullmem
-fr55.excludeAnnotations = fullmem
-fr645.excludeAnnotations = fullmem
-fr935.excludeAnnotations = fullmem
-instinct2.excludeAnnotations = fullmem
-instinct2s.excludeAnnotations = fullmem
-instinct2x.excludeAnnotations = fullmem
-instinctcrossover.excludeAnnotations = fullmem
-venusq.excludeAnnotations = fullmem
-vivoactive3.excludeAnnotations = fullmem
+descentg1.excludeAnnotations = fullmem;daynight
+enduro.excludeAnnotations = fullmem;daynight
+fenix5.excludeAnnotations = fullmem;daynight
+fenix5s.excludeAnnotations = fullmem;daynight
+fenix6.excludeAnnotations = fullmem;daynight
+fenix6s.excludeAnnotations = fullmem;daynight
+fenixchronos.excludeAnnotations = fullmem;daynight
+fr245.excludeAnnotations = fullmem;daynight
+fr55.excludeAnnotations = fullmem;daynight
+fr645.excludeAnnotations = fullmem;daynight
+fr935.excludeAnnotations = fullmem;daynight
+instinct2.excludeAnnotations = fullmem;daynight
+instinct2s.excludeAnnotations = fullmem;daynight
+instinct2x.excludeAnnotations = fullmem;daynight
+instinctcrossover.excludeAnnotations = fullmem;daynight
+venusq.excludeAnnotations = fullmem;daynight
+vivoactive3.excludeAnnotations = fullmem;daynight
 
 # ── Launcher icon variants ───────────────────────────────────────────────────
 # The launcher icon (resources/drawables) is round: the Venu / vivoactive glance
