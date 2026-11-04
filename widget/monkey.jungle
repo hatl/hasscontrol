@@ -15,7 +15,7 @@ project.typecheck = 0
 #   * EntityListView, leaving the classic EntityCardView (~4.1 KB)
 #
 # Verify with:  monkeyc ... -d instinct2x --build-stats 1 -r -O2
-base.excludeAnnotations = lowmem
+base.excludeAnnotations = lowmem;daynight
 
 descentg1.excludeAnnotations = fullmem
 enduro.excludeAnnotations = fullmem
@@ -48,3 +48,27 @@ vivoactive3m.resourcePath = $(vivoactive3m.resourcePath);resources-launcher-40x3
 vivoactive3mlte.resourcePath = $(vivoactive3mlte.resourcePath);resources-launcher-40x33
 etrextouch.resourcePath = $(etrextouch.resourcePath);resources-launcher-38x33
 gpsmap67.resourcePath = $(gpsmap67.resourcePath);resources-launcher-38x33
+
+# ── Day / Night display mode ─────────────────────────────────────────────────
+# Edge devices have a Day mode with a white background, so the glance text
+# colour has to follow it (see AppGlance.mc):
+#   :daynight   — compiled ONLY on these devices, follows the display mode
+#   :darktheme  — compiled everywhere else, always white text
+# None of these are 64 KB devices, so lowmem stays excluded.
+edge1030.excludeAnnotations = lowmem;darktheme
+edge1030bontrager.excludeAnnotations = lowmem;darktheme
+edge1030plus.excludeAnnotations = lowmem;darktheme
+edge1040.excludeAnnotations = lowmem;darktheme
+edge1050.excludeAnnotations = lowmem;darktheme
+edge1060.excludeAnnotations = lowmem;darktheme
+edge520plus.excludeAnnotations = lowmem;darktheme
+edge530.excludeAnnotations = lowmem;darktheme
+edge540.excludeAnnotations = lowmem;darktheme
+edge550.excludeAnnotations = lowmem;darktheme
+edge820.excludeAnnotations = lowmem;darktheme
+edge830.excludeAnnotations = lowmem;darktheme
+edge840.excludeAnnotations = lowmem;darktheme
+edge850.excludeAnnotations = lowmem;darktheme
+edgeexplore.excludeAnnotations = lowmem;darktheme
+edgeexplore2.excludeAnnotations = lowmem;darktheme
+edgemtb.excludeAnnotations = lowmem;darktheme
