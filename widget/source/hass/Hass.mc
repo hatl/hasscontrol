@@ -26,10 +26,13 @@ module Hass {
   const STORAGE_KEY = "Hass/entities/v4/";
 
   // What earlier releases wrote, read once by _migrateStoredEntities(): one
-  // flat Array for the whole list - 10 slots per entity under v3 (:fullmem,
-  // 2.2.0 to 2.3.0), 6 under v2 (2.1.0, and :lowmem up to 2.3.0) - and
-  // before that one Dictionary per entity under the legacy key.
-  (:fullmem)
+  // flat Array for the whole list, and before that one Dictionary per entity
+  // under the legacy key.
+  //   v2: 6 slots per entity - every device in 2.1.0, :lowmem again from
+  //       2.2.1 to 2.3.0
+  //   v3: 10 slots per entity on :fullmem, 2.2.0 to 2.3.0 - and 6 slots on
+  //       :lowmem in 2.2.0 alone, which used this key on both tiers. 2.2.1
+  //       went back to v2 there and left the v3 list where it was.
   const STORAGE_KEY_V3 = "Hass/entities/v3";
 
   const STORAGE_KEY_V2 = "Hass/entities/v2";
@@ -79,6 +82,10 @@ module Hass {
 
   // Records in storage, as of the last load or store.
   var _storedChunks = 0;
+
+  // Set while the list in memory comes from the key of an earlier release
+  // and is not stored as records yet (see _migrateStoredEntities()).
+  var _oldKeys = false;
 
   // Free-heap floor, in bytes. Below this we stop allocating rather than let
   // the VM throw Out Of Memory. Measured on Instinct 2X (64 KB widget budget):
@@ -190,12 +197,26 @@ module Hass {
         App.Storage.setValue(STORAGE_KEY + chunks, chunk);
       } catch (e) {
         Utils.debugLog("storeEntities: setValue failed", null, null);
+
+        if (_oldKeys) {
+          // The list of an earlier release is still under its old key, and
+          // complete there. Records that hold only its first part must not
+          // stand in for it: without record 0, the next launch reads the
+          // old key again.
+          App.Storage.deleteValue(STORAGE_KEY + 0);
+        }
         return false;
       }
 
       // Released before the next one is built.
       chunk = null;
       chunks++;
+
+      // Counted at once: should a later write throw, the next store still
+      // knows of every record there is.
+      if (chunks > _storedChunks) {
+        _storedChunks = chunks;
+      }
     } while (i < count);
 
     // A shorter list: drop the records behind it, last first, so that what
@@ -206,6 +227,14 @@ module Hass {
     }
 
     _storedChunks = chunks;
+
+    if (_oldKeys) {
+      // The list exists as records now - only now may its old key go. That
+      // is this store whichever it is: the one of the migration at launch
+      // or, if that one was skipped or failed, a later one.
+      _oldKeys = false;
+      _dropOldKeys();
+    }
 
     Utils.logMem("storeEntities:done n", chunks);
     return true;
@@ -348,9 +377,11 @@ module Hass {
 
   // Reads the list an earlier release stored (see STORAGE_KEY_V3) and writes
   // it as records right away - at launch the heap is at its emptiest. The
-  // old keys go only once that write went through: a skipped write leaves
-  // them for the next launch to try again. (2.2.0 changed its key without
-  // reading the old one, and the update showed "No entities configured".)
+  // old keys go only once a store went through (see _oldKeys): if this one
+  // is skipped or fails, a later one of this session does it, and if none
+  // does, the next launch finds no record 0 and comes here again. (2.2.0
+  // changed its key without reading the old one, and the update showed "No
+  // entities configured".)
   (:fullmem)
   function _migrateStoredEntities() {
     var stride = Entity.STORED_FIELDS;
@@ -370,22 +401,32 @@ module Hass {
     // Gone before the records are built.
     stored = null;
 
-    if (storeEntities()) {
-      App.Storage.deleteValue(STORAGE_KEY_V3);
-      App.Storage.deleteValue(STORAGE_KEY_V2);
-      App.Storage.deleteValue(STORAGE_KEY_LEGACY);
-    }
+    _oldKeys = true;
+    storeEntities();
 
     Utils.debugLog("Migrated entities: ", _entities, " total");
   }
 
-  // The 64 KB tier only ever wrote v2 lists since 2.1.0. The Dictionary
-  // format before that is not read here: its reader costs more code than
-  // this tier can spare for a release that ran out of memory on it. Such an
-  // install starts with an empty list and imports its group again.
+  (:fullmem)
+  function _dropOldKeys() {
+    App.Storage.deleteValue(STORAGE_KEY_V3);
+    App.Storage.deleteValue(STORAGE_KEY_V2);
+    App.Storage.deleteValue(STORAGE_KEY_LEGACY);
+  }
+
+  // On the 64 KB tier both keys hold six slots per entity. v2 comes first:
+  // where both exist, v3 is the list 2.2.0 left behind (see STORAGE_KEY_V3).
+  // The Dictionary format before 2.1.0 is not read here: its reader costs
+  // more code than this tier can spare for a release that ran out of memory
+  // on it. Such an install starts with an empty list and imports its group
+  // again.
   (:lowmem)
   function _migrateStoredEntities() {
     var stored = App.Storage.getValue(STORAGE_KEY_V2);
+
+    if (stored == null) {
+      stored = App.Storage.getValue(STORAGE_KEY_V3);
+    }
 
     if (stored instanceof Lang.Array) {
       _addStored(stored, Entity.STORED_FIELDS);
@@ -393,15 +434,19 @@ module Hass {
 
     stored = null;
 
-    if (storeEntities()) {
-      App.Storage.deleteValue(STORAGE_KEY_V2);
-    }
+    _oldKeys = true;
+    storeEntities();
+  }
+
+  (:lowmem)
+  function _dropOldKeys() {
+    App.Storage.deleteValue(STORAGE_KEY_V2);
+    App.Storage.deleteValue(STORAGE_KEY_V3);
   }
 
   // Reads the pre-2.0.4 format (one Dictionary per entity). Its key is
-  // deleted by _migrateStoredEntities() once the records are written - not
-  // here, as it used to be: without a refresh to store the list again, that
-  // lost it.
+  // deleted by _dropOldKeys() once the records are written - not here, as
+  // it used to be: without a refresh to store the list again, that lost it.
   (:fullmem)
   function _loadLegacyStoredEntities() {
     var stored = App.Storage.getValue(STORAGE_KEY_LEGACY);
@@ -601,6 +646,10 @@ module Hass {
   function _refreshPendingEntities(error, noop) {
     if (error != null && !_continueRefreshOnError) {
       _refreshActive = false;
+
+      // A chain that paused for the deferred job ends here as well: that job
+      // must not go on with it once the error is on screen.
+      _refreshPaused = false;
       App.getApp().viewController.removeLoader();
       App.getApp().viewController.showError(error);
 
@@ -701,8 +750,8 @@ module Hass {
       _refreshPaused = false;
 
       if (!_canRefresh()) {
-        // The connection went since the chain paused (or a Wi-Fi/LTE sync
-        // is pending): no request may go out now. End the chain here.
+        // The connection went since the chain paused: every further
+        // request would fail. End the chain here.
         _entitiesToRefresh = new [0];
       }
 

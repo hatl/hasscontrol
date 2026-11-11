@@ -485,8 +485,17 @@ module Hass {
       }
     }
 
+    // An equal name keeps the String that is there. Every refresh brings
+    // every name again, as a new String - and replacing one String by an
+    // equal one frees a small block here and keeps a small block there.
+    // After a refresh of the whole list the free heap was in pieces, and
+    // whatever needs a few kB in one piece (an icon, a stored record) ran
+    // out of memory with plenty still free. The same goes for a sensor's
+    // value in setState().
     function setName(newName) {
-      _mName = newName;
+      if (newName == null || !newName.equals(_mName)) {
+        _mName = newName;
+      }
     }
 
     function getRawName() {
@@ -501,7 +510,9 @@ module Hass {
       if (newState instanceof String) {
         if (_mType == TYPE_SENSOR || _mType == TYPE_SELECT || _mType == TYPE_INPUT_NUMBER || _mType == TYPE_DATETIME) {
           _mState = STATE_SENSOR;
-          _mSensorValue = newState;
+          if (!newState.equals(_mSensorValue)) {
+            _mSensorValue = newState;
+          }
         } else {
           _mState = Entity.stringToState(newState);
         }

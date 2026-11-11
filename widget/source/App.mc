@@ -151,6 +151,9 @@ class HassControlApp extends App.AppBase {
 
     Hass.initClient();
     Utils.logMem("init:3 client", null);
+
+    // Before the entities are loaded: see Utils.measureIconCost().
+    Utils.measureIconCost();
     Hass.loadStoredEntities();
     Utils.logMem("init:4 stored n", Hass._entities);
     Hass.loadScenesFromSettings();

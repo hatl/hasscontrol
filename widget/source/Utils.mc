@@ -466,6 +466,27 @@ module Utils {
     dc.drawBitmap(x, y, drawable);
   }
 
+  // What one entity icon takes once it is loaded, in bytes of heap - see
+  // measureIconCost(). 0 until measured.
+  var iconCost = 0;
+
+  // The entity icons are all 60x60 pixels, but what one takes in memory is
+  // up to the display: about 1 kB on an Instinct (4 colours), 3.7 kB on a
+  // watch with 8 bits per pixel, 7.3 kB in native 16-bit colour. The card
+  // view loads one for every redraw, in one piece - and an Out Of Memory
+  // error cannot be caught. So the cost is measured once at launch, before
+  // the entity list is loaded and while the heap is at its emptiest, and
+  // EntityCardView.drawIcon() goes without an icon when one no longer fits.
+  function measureIconCost() {
+    var before = freeMemory();
+    var icon = WatchUi.loadResource(Rez.Drawables.Unknown);
+
+    iconCost = before - freeMemory();
+
+    // Used after the measurement, so that it is still loaded during it.
+    return icon.getWidth();
+  }
+
   // Bytes of heap still available. The Connect IQ VM collects garbage when an
   // allocation cannot be satisfied, so this is a floor, not an exact figure -
   // but it is the only runtime signal there is, and it is what the low-memory
@@ -488,10 +509,10 @@ module Utils {
   // drops a call to the empty release variant only when its arguments are
   // literals, variables or lookups; `list.size()` kept eight call sites in
   // the 64 KB release build, code and label strings included. So pass the
-  // list itself: an Array is logged as its size.
+  // thing itself: an Array or Dictionary is logged as its size.
   (:debug)
   function logMem(tag, value) {
-    if (value instanceof Lang.Array) {
+    if (value instanceof Lang.Array || value instanceof Lang.Dictionary) {
       value = value.size();
     }
     var s = System.getSystemStats();
@@ -504,11 +525,14 @@ module Utils {
   // unused trailing parts. Concatenation happens inside this function so
   // it only runs in debug builds; passing pre-concatenated text at the
   // call site would defeat the stripping. As with logMem, no argument may
-  // contain a call: pass a list itself, an Array in `b` is logged as its size.
+  // contain a call: pass the thing itself. In `b`, an Array is logged as
+  // its size and an exception as its message.
   (:debug)
   function debugLog(a, b, c) {
     if (b instanceof Lang.Array) {
       b = b.size();
+    } else if (b instanceof Lang.Exception) {
+      b = b.getErrorMessage();
     }
     var msg = a;
     if (b != null) {

@@ -639,7 +639,7 @@ class HassSyncDelegate extends Communications.SyncDelegate {
     try {
       WifiLte.applyResult(data);
     } catch (e) {
-      Utils.debugLog("applyResult: ", e.getErrorMessage(), null);
+      Utils.debugLog("applyResult: ", e, null);
     }
 
     finish(null, true);
@@ -679,7 +679,7 @@ class HassSyncDelegate extends Communications.SyncDelegate {
     try {
       WifiLte.onSyncFinished(success, _mExit);
     } catch (e) {
-      Utils.debugLog("onSyncFinished: ", e.getErrorMessage(), null);
+      Utils.debugLog("onSyncFinished: ", e, null);
     }
   }
 }

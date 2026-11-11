@@ -827,6 +827,6 @@ class EntityListView extends Ui.View {
       drawPageBar(dc);
     }
 
-    Utils.logMem("list:onUpdate icons", _mIconCache.size());
+    Utils.logMem("list:onUpdate icons", _mIconCache);
   }
 }

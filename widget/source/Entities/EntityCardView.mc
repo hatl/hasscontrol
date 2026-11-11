@@ -9,6 +9,10 @@ using Utils;
 // EntityListDelegate from EntityListView.mc for navigation and
 // input handling.
 class EntityCardView extends Ui.View {
+  // Free heap that has to remain beyond the icon itself for drawIcon() to
+  // load one: the free heap is rarely in one piece.
+  const ICON_SPARE = 1000;
+
   hidden var _mController;
   hidden var _mLastIndex;
   hidden var _mShowBar;
@@ -211,6 +215,14 @@ class EntityCardView extends Ui.View {
   }
 
   function drawIcon(dc, entity) {
+    // Loading the icon takes Utils.iconCost bytes in one piece. With less
+    // than that and a reserve free the card goes without one: better than
+    // the widget ending in an Out Of Memory error, which with a long list
+    // on a small watch it did - at every redraw, so at every launch.
+    if (Utils.freeMemory() < Utils.iconCost + ICON_SPARE) {
+      return;
+    }
+
     var vh = dc.getHeight();
     var vw = dc.getWidth();
 
