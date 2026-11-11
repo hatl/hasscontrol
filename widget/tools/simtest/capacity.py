@@ -12,8 +12,8 @@ what a watch goes through: a first launch (import, refresh, store), relaunches o
 last relaunch.  Per launch it records how many entities were refreshed, whether the group had to
 be imported again (nothing was stored), the memory in use and any crash.
 
-One line of JSON per n is printed as it finishes (RESULT ...), and a table at the end.  Everything
-lands under work/capacity/.  The simulator is restarted for every n, so a crash cannot leak into
+One line of JSON per n is printed as it finishes (RESULT ...) and appended to
+work/capacity/results.jsonl, and a table is printed at the end.  Everything lands under work/capacity/.  The simulator is restarted for every n, so a crash cannot leak into
 the next one.
 """
 import argparse
@@ -118,6 +118,18 @@ def crash_of(sim, mark):
     return m.group(1).strip() if m else ("yes" if text.strip() else "")
 
 
+def open_entities(sim):
+    """On a device without glances the widget starts on its page of the widget loop ("HassControl"),
+    and a tap opens the entity view from there.  Every phase needs that view up: it is the one that
+    loads an icon for every redraw, which on a colour display is the largest single allocation."""
+    if sim.dev.glance_kb or not re.search(r"hass\s*control", sim.ocr(), re.I):
+        return False
+    w, h = sim.display_size()
+    sim.tap(w // 2, h // 2)
+    time.sleep(1.5)
+    return True
+
+
 def launch_phase(sim, mock, prg, fresh, tag):
     """Push and launch a build, wait for its requests to stop, and report what it did."""
     since, mark = time.time(), sim.crash_mark()
@@ -128,6 +140,7 @@ def launch_phase(sim, mock, prg, fresh, tag):
     launched = sim.launch()
     settled = wait_quiet(mock, since)
     time.sleep(4)                      # the deferred finish stores the list after the last response
+    open_entities(sim)
     _, img = sim.shot(tag)
     text = sim.ocr(img)
     reqs = [e for e in mock.log() if e["ts"] > since]
@@ -146,12 +159,7 @@ def launch_phase(sim, mock, prg, fresh, tag):
 def use_phase(sim, mock, n):
     """A toggle on the first entity and a walk through the list, on the build that is running."""
     since, mark = time.time(), sim.crash_mark()
-    if not sim.dev.glance_kb:
-        # No glances on this device: the widget is on its page of the widget loop, and a tap
-        # opens the entity view from there.
-        w, h = sim.display_size()
-        sim.tap(w // 2, h // 2)
-        time.sleep(1.5)
+    open_entities(sim)
     sim.select()
     called = mock.wait_request(r"/api/services/", timeout=10, since=since, method="POST") is not None
     time.sleep(4)                      # a lock or cover is refreshed again 2 s later
@@ -182,6 +190,8 @@ def one(device, n, prg, first_prg, label, mixed, relaunches, outdir):
         sim.stop()
     res["verdict"] = verdict(res, n)
     print("RESULT " + json.dumps(res, ensure_ascii=False), flush=True)
+    with open(os.path.join(outdir, "results.jsonl"), "a") as f:
+        f.write(json.dumps(res, ensure_ascii=False) + "\n")
     return res
 
 

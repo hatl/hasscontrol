@@ -720,7 +720,21 @@ class Sim:
         return exact or partial
 
     # ------------------------------------------------------------------ simulator menus
-    def menu(self, *path, hover_last=False):
+    def dismiss_dialog(self):
+        """Click the OK button of a simulator message box, if one is up; True when it did.
+
+        Now and then the simulator reports an error of its own in a modal box ("can't close file
+        descriptor 27 (error 9: Bad file descriptor)", seen under load).  Until it is answered no menu
+        opens and no app starts, and everything after it fails for no reason of the widget's."""
+        pos = self.find_text("OK")
+        if not pos:
+            return False
+        self.click_root(*pos)
+        time.sleep(1.0)
+        log("answered a simulator message box")
+        return True
+
+    def menu(self, *path, hover_last=False, _retry=True):
         """Open a simulator menu and click its item, e.g. menu("File", "Kill App") or
         menu("Settings", "Connection Type", "BLE", "Not Connected").  Intermediate items are hovered
         (they open submenus), the last one is clicked (or hovered with hover_last=True)."""
@@ -735,6 +749,8 @@ class Sim:
             if not pos:
                 self.shot(f"menu-fail-{label.replace(' ', '_')}", full=True)
                 self.click_root(1300, 950)   # close the menus
+                if _retry and self.dismiss_dialog():
+                    return self.menu(*path, hover_last=hover_last, _retry=False)
                 raise RuntimeError(f"menu item {label!r} not found under {' > '.join(path[:i + 1])}")
             if last and not hover_last:
                 self.click_root(*pos)
