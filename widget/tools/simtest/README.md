@@ -2,8 +2,8 @@
 
 These scripts drive the Connect IQ simulator without a person at the keyboard: they push a build,
 press the device's buttons, read the screen, and check what the widget sent to a mock Home Assistant.
-49 scenarios over six devices cover the lock confirmation, Wi-Fi/LTE execution, the loopback-http
-exception, the launch wait, the timer fix, the date/time editor and the entity storage. They have
+51 scenarios over six devices cover the lock confirmation, Wi-Fi/LTE execution, the loopback-http
+exception, the launch wait, the timer fix, the date/time editor, the entity storage and the glance. They have
 found five defects that the compiler cannot see: the sync-mode crash, the truncated Wi-Fi/LTE
 question, the Wi-Fi/LTE question hiding the value, the sensor-style values that were not persisted,
 and Back on the launch wait closing the widget. `capacity.py` (below) found a sixth: the Out Of
@@ -44,7 +44,8 @@ change a state behind the widget's back.
 
 ```sh
 ./build-all.sh                       # every build the run needs -> work/variants2/, work/out/
-./runall.sh                          # every device, one process per device
+./runall.sh                          # every device, one process per device (about 50 minutes)
+./runall.sh -j 6                     # six jobs side by side, each in a sandbox (about 15 minutes)
 ./rundt.sh [device ...]              # only the date/time scenarios
 ./retry-failures.sh f7_lock_pin_ok   # named scenarios, one process each
 uv run run.py fenix7x                # one device in one process (less robust, see below)
@@ -56,6 +57,15 @@ uv run run.py f7_lock_pin_ok         # or scenarios by name or by feature
 Wi-Fi/LTE refuses plain http), `build-dt-variants.sh` (the date/time variants) and `build-master.sh`
 (master, plain for the settings-upgrade scenario and pointed at the mock for the scenarios that
 compare with it; `REF=v2.1.0 NAME=v210 ./build-master.sh` builds any other release the same way).
+
+Only one simulator can exist on a machine: it listens on a fixed port, keeps its apps under one
+folder in `/tmp` and takes any other simulator process for itself. `sandbox.sh <command>` runs a
+command with a network, a `/tmp`, a process table and a simulator settings folder of its own
+(bubblewrap, no root needed), and `runall.sh -j N` uses it to run N jobs at once - every device a
+job, a device with many scenarios several (`CHUNK=8` scenarios each). Each job starts its own mocks,
+X display and simulator; your own `simulator.ini` is not touched. A scenario that fails in such a
+run is run once more on its own: with six simulators busy, a tap is lost now and then.
+`capacity.py` and `retry-failures.sh` work under `sandbox.sh` too, e.g. two capacity runs at once.
 
 `run.py` writes `work/results/<scenario>/REPORT.md` with the checks, the screenshots, the app log
 and `run.log`, and `work/results/SUMMARY.md` over the scenarios of that invocation (the shell

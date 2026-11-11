@@ -2227,3 +2227,59 @@ def i2_reimport_sizes(sim, rep):
                       str(gets))
     rep.shot("after-the-last-import")
     check_no_crash(rep, sim, crash_mark)
+
+
+# ============================================================================ glance
+# The glance draws only its text; the firmware paints the stripe behind it.  Watches paint it dark.
+# The Edge units paint it white in their Day display mode, where the white text of 2.3.0 could not be
+# seen (issue #108).  The text follows DeviceSettings.isNightModeEnabled on the devices that have it.
+# The simulator does not paint the white stripe - its glance page stays black in both modes - so the
+# check is the colour of the text: light pixels beside the icon, or none.
+def glance_text_pixels(sim):
+    """Light pixels in the glance list, right of the launcher icon (the text "HassControl" when it is
+    drawn in white; the icon itself is left out)."""
+    img = np.asarray(sim.display_shot().convert("L"))
+    h, w = img.shape
+    return int((img[:, int(w * 0.30):] > 180).sum())
+
+
+def toggle_night_mode(sim):
+    sim.menu("Settings", "Night Mode")
+    time.sleep(2.5)
+
+
+@scenario("edge1040", "e10_glance_day_night", "glance")
+def e10_glance_day_night(sim, rep):
+    """Issue #108: on an Edge in Day mode the glance text must be dark, in Night mode light - and it must
+    follow when the mode changes while the glance is on screen (HassControlApp.onNightModeChanged())."""
+    crash_mark = sim.crash_mark()
+    sim.push(f"{VARIANTS}/base-{sim.device}.prg")
+    time.sleep(3)
+    rep.check(not sim.running(), "the glance list is showing, not the widget")
+    day = glance_text_pixels(sim)
+    rep.shot("day")
+    rep.check(day < 20, "Day mode: the text is not white", f"{day} light pixels")
+    toggle_night_mode(sim)
+    try:
+        night = glance_text_pixels(sim)
+        rep.shot("night")
+        rep.check(night > 150, "Night mode: the text is white, without a new launch", f"{night} light pixels")
+    finally:
+        toggle_night_mode(sim)          # the scenarios after this one expect Day mode
+    again = glance_text_pixels(sim)
+    rep.shot("day-again")
+    rep.check(again < 20, "back in Day mode the text is dark again", f"{again} light pixels")
+    check_no_crash(rep, sim, crash_mark)
+
+
+@scenario("fenix7x", "f7_glance_text", "glance")
+def f7_glance_text(sim, rep):
+    """A watch has no Day mode: its glance stripe is dark and the text stays white."""
+    crash_mark = sim.crash_mark()
+    sim.push(f"{VARIANTS}/base-{sim.device}.prg")
+    time.sleep(3)
+    rep.check(not sim.running(), "the glance list is showing, not the widget")
+    light = glance_text_pixels(sim)
+    rep.shot("glance")
+    rep.check(light > 150, "the glance text is white", f"{light} light pixels")
+    check_no_crash(rep, sim, crash_mark)

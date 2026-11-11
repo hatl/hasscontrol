@@ -914,7 +914,8 @@ class Sim:
                 if any(re.fullmatch(p.replace("*", ".*"), f) for p in pats):
                     os.remove(os.path.join(d, f))
 
-    def start(self, wipe=True, keep_data=False, https_requirements=False, timeout=90, attempt=0):
+    def start(self, wipe=True, keep_data=False, https_requirements=False, timeout=90, attempt=0,
+              night_mode=False):
         """Start the simulator preset to this device (restarts it if running).  wipe=True removes installed
         apps/settings (always do this at the start of a session - the user's own settings must never be used)."""
         global _restore_registered
@@ -936,7 +937,7 @@ class Sim:
         # file, and if its copy wins the next one comes up as the previous device.
         for _ in range(5):
             self._ini(LastUsedDevice=self.device, UseHttpsRequirements=1 if https_requirements else 0,
-                      BleState=2, SleepMode=0, nightMode=0, WifiState=1,
+                      BleState=2, SleepMode=0, nightMode=1 if night_mode else 0, WifiState=1,
                       WindowX=0, WindowY=0)
             time.sleep(0.6)
             current = dict(l.split("=", 1) for l in open(INI).read().splitlines() if "=" in l)
@@ -980,7 +981,7 @@ class Sim:
                 log(f"the simulator {problem}; stopping it and trying again")
                 self.stop()
                 return self.start(wipe=False, keep_data=keep_data, https_requirements=https_requirements,
-                                  timeout=timeout, attempt=attempt + 1)
+                                  timeout=timeout, attempt=attempt + 1, night_mode=night_mode)
             raise RuntimeError(f"the simulator did not come up: it {problem}")
         time.sleep(2.5)
         self._origin = None

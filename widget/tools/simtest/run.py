@@ -115,7 +115,8 @@ def main():
     lines += ["", f"**{len(results) - len(failed)} of {len(results)} scenarios passed.**", ""]
     if failed:
         lines.append("Failing: " + ", ".join(r["name"] for r in failed))
-    path = f"{S}/results/SUMMARY.md"
+    # CIQ_SUMMARY: jobs that run side by side (runall.sh -j) each write a summary of their own
+    path = f"{S}/results/{os.environ.get('CIQ_SUMMARY', 'SUMMARY.md')}"
     open(path, "w").write("\n".join(lines) + "\n")
     print("\n".join(lines[-6:]))
     log("summary: " + path)
