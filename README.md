@@ -152,15 +152,24 @@ header authentication — works exactly as documented, though `select`/`input_se
 what these watches can hold. Rather than crashing, HassControl now stops and tells you:
 
 - Importing stops early with `Low memory: only N of M entities loaded`.
-- If the group response itself is too large to receive, you get `Group too large for this watch`.
+- If a response is too large for the memory that is left - the group itself, or the state of
+  one of its entities - you get `Group too large for this watch`.
 - A state refresh that runs low on memory stops early; the remaining entities keep their
-  last known state and are updated the next time you open the widget.
+  last known state. A list that is only just too long is refreshed completely at the next
+  launch; one that stops short every time is too long.
+- A list that leaves too little memory to be stored safely is not stored. The widget then
+  imports the group again at every launch.
+- A card is shown without its icon when there is no memory left to load one.
 
-In all three cases the fix is the same: put fewer entities in your group. See the
-[FAQ](#faq) entries below.
+In all these cases the fix is the same: put fewer entities in your group. As a guide: in
+testing, an Instinct 2X held 28 entities with short ids and names, and 24 of mixed types.
+Long entity ids and names take more room. See the [FAQ](#faq) entries below.
 
-***Note for other watches:*** *newer devices have 512 KB or more and are unaffected — they
-get the complete feature set.*
+***Note for other watches:*** *they get the complete feature set, and nearly all of them have
+512 KB or more and are unaffected by any of this. Three have 128 KB: Instinct E (40 mm and
+45 mm) and Instinct 3 Solar 45 mm. The safeguards above apply to them as well, though only to
+very large groups: in testing an Instinct E held 60 entities without any restriction, stopped
+storing the list at 90, and refused 110.*
 
 ### Installation
 The easiest way to install the app is to download and install the [ConnectIQ app](https://support.garmin.com/en-US/?faq=mmm2rz2WBI3zbdFQYdiwX8) from Garmin on your smartphone.
@@ -461,7 +470,9 @@ There is a rare occasion when someone changes state of an entity (for example tu
 #### Error message: "Group too large for this watch"
 Your watch is one of the [low-memory devices](#low-memory-devices) and the group you are importing has more entities than it can receive — the response could not even be read into memory.
 
-Remove entities from the group in Home Assistant until the import succeeds. A group of roughly a dozen entities is a realistic target on these watches; the exact number depends on how long your entity ids and names are.
+Remove entities from the group in Home Assistant until the import succeeds. A group of roughly two dozen entities is a realistic target on these watches; the exact number depends on how long your entity ids and names are.
+
+The same message appears when the watch runs out of memory while reading the state of a single entity, later in the import or during a refresh. The cause and the fix are the same.
 
 #### Error message: "Low memory: only N of M entities loaded"
 The group was received, but your watch ran out of room while creating the entities, so HassControl imported the first N and stopped. The N that were imported work normally.
