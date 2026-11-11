@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Builds the simulator test variants for the automated run: fullmem devices use the plain-http mock
-# (http://127.0.0.1:8123), lowmem devices the TLS mock (https://127.0.0.1:8124).
+# (http://127.0.0.1:8123), lowmem devices the TLS mock (https://127.0.0.1:8124).  The wifi* variants
+# use the TLS mock on every device: Wi-Fi/LTE execution refuses plain http.
 set -u
 # usage: [SRC=<widget dir>] build-variants2.sh   (SRC defaults to the widget this folder is in) -> work/variants2/
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -29,23 +30,25 @@ LOW="instinct2x vivoactive3"
 {
 for name in "${!V[@]}"; do
   read -r -a extra <<< "${V[$name]}"
-  # fullmem: plain http (loopback feature), debug builds
-  "$HERE/mkvariant.sh" "$SRC" "$OUT/tw-$name" host=http://127.0.0.1:8123 accessToken=TESTTOKEN group=garmin "${extra[@]}" > /dev/null
+  # fullmem: plain http (loopback feature), debug builds - except wifi*, see the top of this file
+  host=http://127.0.0.1:8123
+  case "$name" in wifi*) host=https://127.0.0.1:8124 ;; esac
+  "$HERE/mkvariant.sh" "$SRC" "$OUT/tw-$name" host=$host accessToken=TESTTOKEN group=garmin "${extra[@]}" > /dev/null
   for dev in $FULL; do
-    out="$OUT/$name-$dev.prg"; log=$("$HERE/build.sh" "$OUT/tw-$name" "$dev" "$out" debug)
+    out="$OUT/$name-$dev.prg"; rm -f "$out"; log=$("$HERE/build.sh" "$OUT/tw-$name" "$dev" "$out" debug)
     if [ -f "$out" ]; then echo "OK   $name $dev debug"; else echo "FAIL $name $dev debug"; echo "$log" | grep -i error | head -3; fi
   done
   # lowmem: https to the TLS mock, release builds (the http-* variants keep their host: they test the rejection)
   "$HERE/mkvariant.sh" "$SRC" "$OUT/tl-$name" host=https://127.0.0.1:8124 accessToken=TESTTOKEN group=garmin "${extra[@]}" > /dev/null
   for dev in $LOW; do
-    out="$OUT/$name-$dev.prg"; log=$("$HERE/build.sh" "$OUT/tl-$name" "$dev" "$out" release)
+    out="$OUT/$name-$dev.prg"; rm -f "$out"; log=$("$HERE/build.sh" "$OUT/tl-$name" "$dev" "$out" release)
     if [ -f "$out" ]; then echo "OK   $name $dev release"; else echo "FAIL $name $dev release"; echo "$log" | grep -i error | head -3; fi
   done
 done
 # plain-http base for the lowmem devices (expected: "Check settings, invalid url")
 "$HERE/mkvariant.sh" "$SRC" "$OUT/tw-base" host=http://127.0.0.1:8123 accessToken=TESTTOKEN group=garmin > /dev/null
 for dev in $LOW; do
-  out="$OUT/http-base-$dev.prg"; log=$("$HERE/build.sh" "$OUT/tw-base" "$dev" "$out" release)
+  out="$OUT/http-base-$dev.prg"; rm -f "$out"; log=$("$HERE/build.sh" "$OUT/tw-base" "$dev" "$out" release)
   if [ -f "$out" ]; then echo "OK   http-base $dev release"; else echo "FAIL http-base $dev release"; fi
 done
 } > "$OUT/BUILD-RESULTS.txt" 2>&1

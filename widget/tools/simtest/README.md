@@ -42,15 +42,19 @@ change a state behind the widget's back.
 ## Automated runs
 
 ```sh
-./build-variants2.sh                 # settings variants for the older scenarios -> work/variants2/
-./build-dt-variants.sh               # the date/time variants
-./build-master.sh                    # master, for the settings-upgrade scenario
+./build-all.sh                       # every build the run needs -> work/variants2/, work/out/
 ./runall.sh                          # every device, one process per device
 ./rundt.sh [device ...]              # only the date/time scenarios
 ./retry-failures.sh f7_lock_pin_ok   # named scenarios, one process each
 uv run run.py fenix7x                # one device in one process (less robust, see below)
 uv run run.py f7_lock_pin_ok         # or scenarios by name or by feature
 ```
+
+`build-all.sh` runs the three build scripts and fails when one build fails: `build-variants2.sh`
+(the settings variants of the older scenarios; the `wifi*` ones against the TLS mock, because
+Wi-Fi/LTE refuses plain http), `build-dt-variants.sh` (the date/time variants) and `build-master.sh`
+(master, plain for the settings-upgrade scenario and pointed at the mock for the scenarios that
+compare with it; `REF=v2.1.0 NAME=v210 ./build-master.sh` builds any other release the same way).
 
 `run.py` writes `work/results/<scenario>/REPORT.md` with the checks, the screenshots, the app log
 and `run.log`, and `work/results/SUMMARY.md` over the scenarios of that invocation (the shell
@@ -93,7 +97,9 @@ Everything below was learned the hard way; `ciqsim.py` carries the same notes at
   before starting a new one, or it never binds and hangs with an empty window (whatever still holds
   it after a while - a monkeydo left over from an interrupted run - is killed). A simulator that
   inherits a `simulator.ini` with duplicate keys hangs behind a modal warning instead: the harness
-  writes that file atomically and only while no simulator runs. Keys worth knowing: `BleState` and
+  writes that file atomically and only while no simulator runs, and puts it back as it was when
+  the run ends (`cleanup.sh` catches up after an interrupted one) - a run switches
+  `UseHttpsRequirements` off, which your own sessions should not inherit. Keys worth knowing: `BleState` and
   `WifiState` (0 not initialised, 1 not connected, 2 connected), `TimeSetting` (the simulator
   defaults to the 12-hour clock; 24-hour scenarios set it to 1), and 32-hex-character keys that
   remember the device per app id and override `LastUsedDevice` (the harness drops them).

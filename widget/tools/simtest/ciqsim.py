@@ -23,6 +23,7 @@ Typical use (see SCENARIO-GUIDE.md for the full story):
 
 Everything is synchronous; one simulator at a time (port 1234).
 """
+import atexit
 import io
 import json
 import os
@@ -60,11 +61,42 @@ MENUBAR_X = {"File": 18, "Settings": 72, "Simulation": 147, "Data Fields": 231, 
 MENUBAR_Y = 13
 IMAGE_TOP = 28          # the device image is drawn below the menu bar
 APP_NAME = "APP"        # every variant is pushed as APP.prg -> MEDIA/APP.PRG, SETTINGS/APP.SET, DATA/APP.DAT
+# The simulator's settings as they were before a run changed them (device, connection states, the
+# https requirement) - put back by restore_ini() once the simulators are gone.
+INI_BACKUP = os.path.join(WORK, "simulator.ini.before")
+_restore_registered = False
 
 
 def log(msg):
     sys.stderr.write(time.strftime("%H:%M:%S ") + msg + "\n")
     sys.stderr.flush()
+
+
+def backup_ini():
+    """Keep a copy of the simulator's settings before the first change to them.  A copy that is
+    already there is the older one - of an interrupted run - and is the one to keep."""
+    if os.path.exists(INI) and not os.path.exists(INI_BACKUP):
+        os.makedirs(WORK, exist_ok=True)
+        shutil.copy2(INI, INI_BACKUP)
+
+
+def restore_ini(wait=5.0):
+    """Put the simulator's settings back as backup_ini() found them, so a run leaves no trace in the
+    user's own simulator sessions (above all UseHttpsRequirements, which start() switches off).  Only
+    once no simulator runs: a running one writes the file again when it exits; cleanup.sh catches up
+    in that case.  Returns True when the settings were put back."""
+    if not os.path.exists(INI_BACKUP):
+        return False
+    end = time.time() + wait
+    while Sim._simulator_pids():
+        if time.time() > end:
+            return False
+        time.sleep(0.3)
+    tmp = f"{INI}.{os.getpid()}.restore"
+    shutil.copy2(INI_BACKUP, tmp)
+    os.replace(tmp, INI)
+    os.remove(INI_BACKUP)
+    return True
 
 
 def ensure_display(geometry="1400x1000"):
@@ -811,6 +843,7 @@ class Sim:
         simulator then reports in a modal warning ("entry 'X' appears more than once in group"),
         where it sits forever without opening its port.  Duplicates already in the file are dropped,
         keeping the last value."""
+        backup_ini()
         lines = open(INI).read().splitlines() if os.path.exists(INI) else []
         # Entries keyed by a 32-character application id remember which device each app was last
         # run on, and the simulator prefers them over LastUsedDevice - which is how it kept coming
@@ -850,6 +883,10 @@ class Sim:
     def start(self, wipe=True, keep_data=False, https_requirements=False, timeout=90, attempt=0):
         """Start the simulator preset to this device (restarts it if running).  wipe=True removes installed
         apps/settings (always do this at the start of a session - the user's own settings must never be used)."""
+        global _restore_registered
+        if not _restore_registered:
+            atexit.register(restore_ini)
+            _restore_registered = True
         self.stop()
         time.sleep(1.0)        # let a simulator that is on its way out finish writing the ini
         if wipe:
@@ -891,20 +928,24 @@ class Sim:
         # stay generous even so - a healthy cold start can take the better part of a minute, and
         # killing those instead produces exactly the instability it is meant to avoid.
         end = time.time() + timeout
+        problem = f"did not open its port within {timeout} s"
         while time.time() < end:
             if proc.poll() is not None:
-                log(f"the simulator exited immediately (status {proc.returncode})")
+                # It gave up by itself - typically because port 1234 was still taken.  That is a
+                # failed start like the silent one below, not a simulator that is up.
+                problem = f"exited right away (status {proc.returncode})"
                 break
             if self._port_listening() and (self.attached or self.window(refresh=True)):
+                problem = None
                 break
             time.sleep(0.5)
-        else:
+        if problem:
             if attempt < 3:
-                log(f"simulator did not open its port within {timeout} s; killing it and retrying")
+                log(f"the simulator {problem}; stopping it and trying again")
                 self.stop()
                 return self.start(wipe=False, keep_data=keep_data, https_requirements=https_requirements,
                                   timeout=timeout, attempt=attempt + 1)
-            raise RuntimeError("simulator did not come up (port 1234 never opened)")
+            raise RuntimeError(f"the simulator did not come up: it {problem}")
         time.sleep(2.5)
         self._origin = None
         self.ble_state = "Connected"          # BleState=2, written above
@@ -1204,9 +1245,18 @@ class Sim:
         log("NOTE " + text)
 
 
-LOWMEM = {"instinct2x", "instinct2", "instinct2s", "instinctcrossover", "vivoactive3", "vivoactive3m", "venusq",
-          "fenix5", "fenix5s", "fenix6", "fenix6s", "fenixchronos", "fr245", "fr55", "fr645", "fr935", "descentg1",
-          "enduro"}
+def _lowmem_devices():
+    """The 64 KB devices: those monkey.jungle builds without the :fullmem code.  Read from the jungle
+    file so the list cannot drift from the build."""
+    jungle = os.path.join(HERE, "..", "..", "monkey.jungle")
+    try:
+        text = open(jungle).read()
+    except OSError:
+        return set()
+    return set(re.findall(r"^(\w+)\.excludeAnnotations\s*=[^\n#]*\bfullmem\b", text, re.M))
+
+
+LOWMEM = _lowmem_devices()
 
 
 class Report:
