@@ -2,11 +2,12 @@
 
 These scripts drive the Connect IQ simulator without a person at the keyboard: they push a build,
 press the device's buttons, read the screen, and check what the widget sent to a mock Home Assistant.
-46 scenarios over six devices cover the lock confirmation, Wi-Fi/LTE execution, the loopback-http
-exception, the launch wait, the timer fix and the date/time editor. They have found five defects that
-the compiler cannot see: the sync-mode crash, the truncated Wi-Fi/LTE question, the Wi-Fi/LTE
-question hiding the value, the sensor-style values that were not persisted, and Back on the launch
-wait closing the widget.
+49 scenarios over six devices cover the lock confirmation, Wi-Fi/LTE execution, the loopback-http
+exception, the launch wait, the timer fix, the date/time editor and the entity storage. They have
+found five defects that the compiler cannot see: the sync-mode crash, the truncated Wi-Fi/LTE
+question, the Wi-Fi/LTE question hiding the value, the sensor-style values that were not persisted,
+and Back on the launch wait closing the widget. `capacity.py` (below) found a sixth: the Out Of
+Memory crash at the end of a refresh once a 64 KB watch holds some two dozen entities.
 
 ## Setup
 
@@ -18,9 +19,9 @@ manages the Python environment (`pyproject.toml`: python-xlib, pillow, numpy; `u
 
 Everything a run produces goes under `work/` (gitignored; `CIQ_WORK` moves it): `work/variants2/`
 holds the builds, `work/results/` the reports, `work/mock/` the mock servers' logs and their
-self-signed certificate, `work/live/` the exploratory sessions. The mock servers and the private
-X display are started on demand and left running; stop them with `./mocks.sh stop` and
-`./display.sh stop`.
+self-signed certificate, `work/live/` the exploratory sessions, `work/capacity/` the capacity runs.
+The mock servers and the private X display are started on demand and left running; stop them with
+`./mocks.sh stop` and `./display.sh stop`.
 
 ## Exploratory testing by hand
 
@@ -63,6 +64,25 @@ wrappers keep a copy per device). `CIQ_VARIANTS=<dir>` points a run at builds in
 tree into one, for comparing revisions). `mkvariant.sh` copies the widget sources and overrides
 property defaults in `resources/properties.xml`; `build.sh` compiles one variant; `cleanup.sh` stops
 stray runners, simulators and monkeydo processes.
+
+### Capacity
+
+```sh
+uv run capacity.py instinct2x 12 18 24 28            # groups of n switches
+uv run capacity.py instinct2x 24 --mixed             # every supported type, repeated up to n
+uv run capacity.py instinct2x 24 --ref master        # a build of master instead of this tree
+uv run capacity.py instinct2x 24 --first-ref master  # master imports and stores, this tree takes over
+```
+
+How many entities a build holds on a device, and what happens beyond that. For every n the mock
+gets a group of n entities, and a release build pointed at it goes through what a watch goes
+through: a first launch (import, refresh, store), relaunches on the stored list, one toggle, a walk
+through the list and a last relaunch. Per launch it records how many entities were refreshed,
+whether the group had to be imported again (nothing was stored), the memory in use and any crash;
+a table at the end gives one verdict per n. Run it on one 64 KB device and on `instincte45mm` (128 KB
+with the full feature set, the smallest full-memory class) whenever a change adds code to the widget
+or touches how entities are loaded, refreshed or stored: on these devices the build's own size is
+what decides how many entities fit.
 
 `uv run explore.py <device> <variant> <steps...>` is the automated machinery without assertions: it
 walks the widget on the private display and dumps a screenshot, the OCR text, the app log and the

@@ -33,7 +33,7 @@ import numpy as np
 from PIL import Image
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from ciqsim import Sim, Mock, Report, MOCK_HTTP, MOCK_HTTPS, S, VARIANTS, log
+from ciqsim import Sim, Mock, Report, MOCK_HTTP, MOCK_HTTPS, S, VARIANTS, LOWMEM, log
 
 MASTER_PRG = os.path.join(S, "out", "master-fenix7x-debug.prg")   # built by build-master.sh
 
@@ -2052,3 +2052,178 @@ def vq_loader_back(sim, rep):
     then back.  The mock answers 5 s late here - the tap and its screenshot need the extra time before
     the back."""
     _loader_back(sim, rep, delay=5, tap_first=True)
+
+
+# ============================================================================ entity storage
+# The entity list is stored as records of a few entities each, under "Hass/entities/v4/<number>"
+# (Hass.STORAGE_KEY).  Releases up to 2.3.0 wrote one Array for the whole list - "Hass/entities/v3" on
+# full-memory devices, "Hass/entities/v2" on 64 KB ones - and the first launch after the update turns
+# that into records.  A write of the whole list needed more free memory the longer the list was, and
+# an Out Of Memory error cannot be caught: past some two dozen entities every refresh on a 64 KB
+# watch ended in a crash.
+#
+# Builds: base-<device>.prg, and master-<device>.prg from build-master.sh (master, pointed at the mock).
+def state_gets(mock, since):
+    """The entity ids (group included) the widget asked the mock for since `since`, in order."""
+    return [e["path"].rsplit("/", 1)[-1] for e in mock.requests(since)
+            if e["method"] == "GET" and "/api/states/" in e["path"]]
+
+
+def wait_quiet(mock, since, quiet=5, limit=120, idle=20):
+    """Wait until the widget has stopped sending requests (or, after `idle` s, never sent any)."""
+    last, mark, start = -1, time.time(), time.time()
+    while time.time() - start < limit:
+        n = len(mock.requests(since))
+        if n != last:
+            last, mark = n, time.time()
+        elif time.time() - mark > (quiet if n else idle):
+            return n
+        time.sleep(0.5)
+    return last
+
+
+def stored_keys(sim):
+    """The keys of the entity list that were ever written to the simulator's copy of
+    Application.Storage.  APP.DAT keeps the key strings readable - and keeps them after a value is
+    replaced or deleted, so this tells that a key was written, never that one is gone."""
+    try:
+        data = open(sim.app_files()["dat"], "rb").read()
+    except FileNotFoundError:
+        return set()
+    return {k.decode() for k in re.findall(rb"Hass/entities(?:/v\d+(?:/\d+)?)?", data)}
+
+
+def relaunch_on_storage(sim, mock, variant="base"):
+    """Start a build on the storage that is there; returns what it asked the mock for."""
+    since = time.time()
+    sim.push(f"{VARIANTS}/{variant}-{sim.device}.prg", fresh_settings=True, fresh_storage=False)
+    launched = sim.launch()
+    wait_quiet(mock, since)
+    time.sleep(3)                       # the list is stored a moment after the last response
+    return launched, state_gets(mock, since)
+
+
+def _storage_upgrade(sim, rep, mock, old_key):
+    """master imports the group and stores it its way; the current build then starts on that storage,
+    must load the list without importing it again, and must leave it behind as records.  The master
+    build talks to the TLS mock on every device (it knows no plain http), the current one to `mock`."""
+    crash_mark = sim.crash_mark()
+    master = f"{VARIANTS}/master-{sim.device}.prg"
+    if not os.path.exists(master):
+        rep.check(False, "the master build is available (build-master.sh)", master)
+        return
+    old_mock = sim.mock_https
+    old_mock.reset()
+    mock.reset()
+    since = time.time()
+    sim.push(master)
+    sim.launch()
+    rep.check(wait_entities(sim, old_mock), "master imported the group")
+    wait_quiet(old_mock, since)
+    time.sleep(3)
+    keys = stored_keys(sim)
+    rep.check(old_key in keys, f"master stored the list under {old_key}", str(sorted(keys)))
+    rep.shot("master")
+
+    launched, gets = relaunch_on_storage(sim, mock)
+    rep.check(launched, "the current build starts on master's storage")
+    rep.check("group.garmin" not in gets, "the stored list was loaded: the group was not imported again",
+              str(gets[:3]))
+    rep.check(sorted(gets) == sorted(ENTITIES), "every entity of the list was refreshed, each once",
+              f"{len(gets)} requests for {len(set(gets))} of {len(ENTITIES)} entities")
+    if sim.device not in LOWMEM:        # debug builds say what they loaded
+        rep.check(sim.wait_log(rf"Migrated entities: {len(ENTITIES)} total", timeout=3) is not None,
+                  f"the app log reports {len(ENTITIES)} migrated entities")
+    keys = stored_keys(sim)
+    rep.check("Hass/entities/v4/0" in keys, "the list is stored as records now", str(sorted(keys)))
+    rep.shot("after-the-update")
+
+    launched, gets = relaunch_on_storage(sim, mock)
+    rep.check("group.garmin" not in gets and sorted(gets) == sorted(ENTITIES),
+              "the records load at the next launch, again without an import",
+              f"{len(gets)} requests, group import: {'group.garmin' in gets}")
+    if sim.device not in LOWMEM:
+        rep.check(sim.wait_log(rf"Loaded entities: {len(ENTITIES)} total", timeout=3) is not None,
+                  f"the app log reports {len(ENTITIES)} loaded entities")
+
+    # The old key is gone: master, started once more on this storage, finds no list of its own and
+    # imports the group.  (The storage file cannot tell - it keeps the bytes of deleted values.)  It
+    # also shows what a step back to the older release does: an import, not a crash.
+    since = time.time()
+    sim.push(master, fresh_settings=True, fresh_storage=False)
+    sim.launch()
+    back = old_mock.wait_request(r"group\.garmin", timeout=25, since=since) is not None
+    rep.check(back, f"{old_key} is gone: master finds no list on this storage and imports the group")
+    wait_quiet(old_mock, since)
+    check_no_crash(rep, sim, crash_mark)
+
+
+@scenario("fenix7x", "f7_storage_upgrade", "entity storage")
+def f7_storage_upgrade(sim, rep):
+    """A full-memory watch updated from 2.3.0: the list stored as one ten-slot Array ("Hass/entities/v3")
+    is loaded, written as records and its old key removed - no "No entities configured", no new import."""
+    _storage_upgrade(sim, rep, sim.mock_http, "Hass/entities/v3")
+
+
+@scenario("instinct2x", "i2_storage_upgrade", "entity storage")
+def i2_storage_upgrade(sim, rep):
+    """The same on a 64 KB watch, whose list is one six-slot Array under "Hass/entities/v2"."""
+    _storage_upgrade(sim, rep, sim.mock_https, "Hass/entities/v2")
+
+
+def _refresh_entities_from_menu(sim):
+    """Menu > Settings > Refresh entities, on a 64 KB watch (whose Settings menu has no list view
+    switch above that entry)."""
+    sim.key("menu", hold_ms=1300)
+    time.sleep(1.2)
+    for _ in range(3):                  # Scenes, Entities, Entities&Scenes, Settings
+        sim.key("down")
+    sim.key("enter")
+    time.sleep(1.2)
+    sim.key("down")                     # Start View, Refresh entities
+    sim.key("enter")
+
+
+@scenario("instinct2x", "i2_reimport_sizes", "entity storage")
+def i2_reimport_sizes(sim, rep):
+    """The group changes size across the boundaries of the stored records (4 entities each on this
+    tier), down to nothing and back, and loses a member from its middle.  After every import the next
+    launch must ask for exactly the entities of the group, each once: no record of the longer list
+    before it may be left behind, and none missing."""
+    m = sim.mock_https
+    crash_mark = sim.crash_mark()
+    m.reset()
+    lists = [("13 entities", ENTITIES[:13]),
+             ("12 entities", ENTITIES[:12]),
+             ("5 entities", ENTITIES[:5]),
+             ("4 entities", ENTITIES[:4]),
+             ("an empty group", []),
+             ("13 entities again", ENTITIES[:13]),
+             ("one removed from the middle", ENTITIES[:3] + ENTITIES[4:13])]
+    for i, (label, ids) in enumerate(lists):
+        m.set("group.garmin", "on", {"entity_id": ids})
+        since = time.time()
+        if i == 0:
+            sim.push(f"{VARIANTS}/base-{sim.device}.prg")
+            sim.launch()
+        else:
+            _refresh_entities_from_menu(sim)
+        imported = m.wait_request(r"group\.garmin", timeout=25, since=since) is not None
+        rep.check(imported, f"{label}: the group was imported")
+        wait_quiet(m, since)
+        time.sleep(3)
+        if not imported:
+            rep.shot(f"no-import-{i}")
+
+        _, gets = relaunch_on_storage(sim, m)
+        if ids:
+            rep.check("group.garmin" not in gets, f"{label}: the next launch loads the stored list",
+                      str(gets[:3]))
+            rep.check(gets == ids, f"{label}: it asks for exactly these entities, in order",
+                      f"asked for {len(gets)}: {gets}")
+        else:
+            # Nothing stored but an empty record: the launch imports the group, as on a first launch.
+            rep.check(gets == ["group.garmin"], f"{label}: the next launch has no entities and imports",
+                      str(gets))
+    rep.shot("after-the-last-import")
+    check_no_crash(rep, sim, crash_mark)

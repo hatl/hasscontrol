@@ -3,9 +3,10 @@
 # first and the current one on top of what it left behind:
 #   work/out/master-<device>-debug.prg    plain, no setting overrides - f7_stale_settings runs it so
 #                                         the simulator stores its settings
-#   work/variants2/master-<device>.prg    pointed at the mock like the other variants (fullmem: debug,
-#                                         http://127.0.0.1:8123; lowmem: release, https://127.0.0.1:8124)
-#                                         - i2_phone_lost and the storage upgrade scenarios
+#   work/variants2/master-<device>.prg    pointed at the TLS mock, https://127.0.0.1:8124, on every device
+#                                         (plain http to a loopback host is newer than master; fullmem:
+#                                         debug, lowmem: release) - i2_phone_lost and the storage upgrade
+#                                         scenarios
 # usage: [REF=master] [NAME=master] [FULL="fenix7x"] [LOW="instinct2x"] build-master.sh [device ...]
 #        (the devices are those of the plain build, fenix7x by default)
 #        REF=v2.1.0 NAME=v210 build-master.sh     builds that release as v210-<device>.prg
@@ -38,15 +39,8 @@ for dev in ${*:-fenix7x}; do
   build "$SRC" "$dev" "$WORK/out/$NAME-$dev-debug.prg" debug "$NAME (plain)"
 done
 
-COMMON="accessToken=TESTTOKEN group=garmin"
-if [ -n "$FULL" ]; then
-  # shellcheck disable=SC2086
-  "$HERE/mkvariant.sh" "$SRC" "$OUT/tw-$NAME" host=http://127.0.0.1:8123 $COMMON > /dev/null || { echo "FAIL mkvariant tw-$NAME"; FAILED=1; }
-  for dev in $FULL; do build "$OUT/tw-$NAME" "$dev" "$OUT/$NAME-$dev.prg" debug "$NAME"; done
-fi
-if [ -n "$LOW" ]; then
-  # shellcheck disable=SC2086
-  "$HERE/mkvariant.sh" "$SRC" "$OUT/tl-$NAME" host=https://127.0.0.1:8124 $COMMON > /dev/null || { echo "FAIL mkvariant tl-$NAME"; FAILED=1; }
-  for dev in $LOW; do build "$OUT/tl-$NAME" "$dev" "$OUT/$NAME-$dev.prg" release "$NAME"; done
-fi
+# shellcheck disable=SC2086
+"$HERE/mkvariant.sh" "$SRC" "$OUT/tl-$NAME" host=https://127.0.0.1:8124 accessToken=TESTTOKEN group=garmin > /dev/null || { echo "FAIL mkvariant tl-$NAME"; FAILED=1; }
+for dev in $FULL; do build "$OUT/tl-$NAME" "$dev" "$OUT/$NAME-$dev.prg" debug "$NAME"; done
+for dev in $LOW; do build "$OUT/tl-$NAME" "$dev" "$OUT/$NAME-$dev.prg" release "$NAME"; done
 exit $FAILED
