@@ -65,6 +65,8 @@ APP_NAME = "APP"        # every variant is pushed as APP.prg -> MEDIA/APP.PRG, S
 # https requirement) - put back by restore_ini() once the simulators are gone.
 INI_BACKUP = os.path.join(WORK, "simulator.ini.before")
 _restore_registered = False
+# Every simulator this process started, whichever Sim object did it - see Sim._reap().
+_SIM_PROCS = []
 
 
 def log(msg):
@@ -96,6 +98,22 @@ def restore_ini(wait=5.0):
     shutil.copy2(INI_BACKUP, tmp)
     os.replace(tmp, INI)
     os.remove(INI_BACKUP)
+    return True
+
+
+def ensure_mocks():
+    """Start the two mock Home Assistant servers (mocks.sh) unless both already answer.  A run from a
+    clean checkout otherwise fails its first scenario with "Connection refused"."""
+    import socket
+    for port in (8123, 8124):
+        try:
+            socket.create_connection(("127.0.0.1", port), timeout=1).close()
+        except OSError:
+            break
+    else:
+        return False
+    log("starting the mock servers")
+    subprocess.run([os.path.join(HERE, "mocks.sh"), "start"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     return True
 
 
@@ -910,6 +928,7 @@ class Sim:
                 break
             log("the simulator rewrote its settings; writing them again")
         os.makedirs(self.log_dir, exist_ok=True)
+        ensure_mocks()
         env = dict(os.environ)
         if not self.attached:
             ensure_display()
@@ -923,6 +942,7 @@ class Sim:
                                 cwd=self.log_dir)
         self._pid = proc.pid
         self._proc = proc
+        _SIM_PROCS.append(proc)
         # A simulator that could not bind port 1234 never recovers: it sits there with an empty
         # window for as long as you let it, so it is killed and started again.  The budget has to
         # stay generous even so - a healthy cold start can take the better part of a minute, and
@@ -992,6 +1012,7 @@ class Sim:
                 os.kill(int(p), signal.SIGKILL)
             except ProcessLookupError:
                 pass
+        self._reap()
         self._win = None
         self._origin = None
         self._pid = None
@@ -1003,6 +1024,22 @@ class Sim:
             self._x = None
         if wait_port:
             self._wait_port_free()
+
+    @staticmethod
+    def _reap():
+        """Collect the exit status of every simulator this process started and that has ended.
+
+        A killed simulator stays a zombie until its parent does that, and a zombie still owns its
+        process id: the next simulator takes it for a running instance and exits at once with
+        status 255 - every time, for as long as the zombie is there.  That is what a scenario that
+        failed right after start() used to do to every scenario after it: run.py makes a new Sim
+        then, while the old one - and the process it started - is still referenced by the report."""
+        for proc in list(_SIM_PROCS):
+            try:
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                continue                    # still running: not ours to wait for here
+            _SIM_PROCS.remove(proc)
 
     @staticmethod
     def _port_holders():
