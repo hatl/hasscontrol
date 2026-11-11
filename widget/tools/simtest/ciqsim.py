@@ -1153,6 +1153,13 @@ class Sim:
                 break
             time.sleep(0.5)
         else:
+            if retry:
+                # A simulator that takes no upload has hung (it happens about once in a long
+                # session, see README.md).  A fresh one usually takes it.
+                log("monkeydo did not upload the app; restarting the simulator and pushing again")
+                self.start(wipe=False)
+                return self.push(prg, fresh_settings=fresh_settings, fresh_storage=fresh_storage,
+                                 timeout=timeout, retry=False)
             raise RuntimeError("monkeydo did not upload the app (is the simulator running the right device?)")
         time.sleep(4.0)
         # The window title names the device the simulator is showing.  Switching devices can lag

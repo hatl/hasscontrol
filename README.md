@@ -160,6 +160,8 @@ what these watches can hold. Rather than crashing, HassControl now stops and tel
 - A list that leaves too little memory to be stored safely is not stored. The widget then
   imports the group again at every launch.
 - A card is shown without its icon when there is no memory left to load one.
+- A stored list that no longer fits after an update of the widget is shortened at its end
+  to what does fit.
 
 In all these cases the fix is the same: put fewer entities in your group. As a guide: in
 testing, an Instinct 2X held 28 entities with short ids and names, and 24 of mixed types.
