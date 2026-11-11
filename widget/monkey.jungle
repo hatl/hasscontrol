@@ -1,6 +1,12 @@
 project.manifest = manifest.xml
 project.typecheck = 0
 
+# Only source/ holds code. Without this line the compiler takes every .mc file
+# below the project root - a copy of the SDK, the source copies the simulator
+# harness keeps in tools/simtest/work - and the build fails with "Redefinition"
+# errors.
+base.sourcePath = source
+
 # ── Low-memory feature stripping ─────────────────────────────────────────────
 # Devices whose *widget* memory limit is 64 KB cannot hold the full feature set:
 # code+data alone occupies ~53 KB of the 64 KB budget, leaving too little heap
