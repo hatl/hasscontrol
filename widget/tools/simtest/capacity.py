@@ -120,12 +120,16 @@ def crash_of(sim, mark):
 
 def open_entities(sim):
     """On a device without glances the widget starts on its page of the widget loop ("HassControl"),
-    and a tap opens the entity view from there.  Every phase needs that view up: it is the one that
-    loads an icon for every redraw, which on a colour display is the largest single allocation."""
+    and a tap - the select button where there is no touch screen - opens the entity view from
+    there.  Every phase needs that view up: it is the one that loads an icon for every redraw,
+    which on a colour display is the largest single allocation."""
     if sim.dev.glance_kb or not re.search(r"hass\s*control", sim.ocr(), re.I):
         return False
-    w, h = sim.display_size()
-    sim.tap(w // 2, h // 2)
+    if sim.dev.touch:
+        w, h = sim.display_size()
+        sim.tap(w // 2, h // 2)
+    else:
+        sim.select()
     time.sleep(1.5)
     return True
 
