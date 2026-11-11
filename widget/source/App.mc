@@ -141,6 +141,15 @@ class HassControlApp extends App.AppBase {
     ];
   }
 
+  // The system calls this when the display changes between its Day and
+  // Night mode (Edge units): the glance has to follow with its text colour
+  // (see AppGlance.onUpdate()). The widget's own views are dark in both.
+  // No 64 KB device has such a mode.
+  (:fullmem)
+  function onNightModeChanged() {
+    Ui.requestUpdate();
+  }
+
   // Return the initial view of your application here
   function getInitialView() {
     Utils.logMem("init:0 enter", null);
