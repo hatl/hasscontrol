@@ -483,8 +483,17 @@ module Utils {
   // `value`: arguments are evaluated at the call site, so building the label
   // with `+` there would allocate a String in release builds too - exactly the
   // kind of allocation this is here to find.
+  //
+  // For the same reason an argument must never contain a call. The compiler
+  // drops a call to the empty release variant only when its arguments are
+  // literals, variables or lookups; `list.size()` kept eight call sites in
+  // the 64 KB release build, code and label strings included. So pass the
+  // list itself: an Array is logged as its size.
   (:debug)
   function logMem(tag, value) {
+    if (value instanceof Lang.Array) {
+      value = value.size();
+    }
     var s = System.getSystemStats();
     var label = value == null ? tag : tag + "=" + value;
     System.println("MEM " + label + " used=" + s.usedMemory + " free=" + s.freeMemory + " total=" + s.totalMemory);
@@ -494,9 +503,13 @@ module Utils {
   // One-, two- or three-part callers all go through this: pass null for
   // unused trailing parts. Concatenation happens inside this function so
   // it only runs in debug builds; passing pre-concatenated text at the
-  // call site would defeat the stripping.
+  // call site would defeat the stripping. As with logMem, no argument may
+  // contain a call: pass a list itself, an Array in `b` is logged as its size.
   (:debug)
   function debugLog(a, b, c) {
+    if (b instanceof Lang.Array) {
+      b = b.size();
+    }
     var msg = a;
     if (b != null) {
       msg = msg + b;

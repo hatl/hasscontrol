@@ -1,15 +1,17 @@
 
+using Toybox.Lang;
 using Toybox.System;
 using Utils;
 
 module Hass {
   class Entity {
-    // Persisted form: this many flat slots per entity, laid end to end in one
-    // Array - see writeToStorage()/createFromStorage(). Entities used to be
-    // stored as one seven-key Dictionary each; serialising 13 of those blew
-    // past the free-heap floor and crashed inside App.Storage.setValue() on
-    // Instinct 2X. A Dictionary carries its hash table and per-entry objects,
-    // a flat Array is one allocation of plain slots.
+    // Persisted form: this many flat slots per entity, laid end to end in
+    // the records Hass.storeEntities() writes - see writeToStorage()/
+    // createFromStorage(). Entities used to be stored as one seven-key
+    // Dictionary each; serialising 13 of those blew past the free-heap floor
+    // and crashed inside App.Storage.setValue() on Instinct 2X. A Dictionary
+    // carries its hash table and per-entry objects, a flat Array is one
+    // allocation of plain slots.
     //
     // `ext` is deliberately not persisted: external (settings-defined)
     // entities are never written, so it is always false on read.
@@ -27,13 +29,14 @@ module Hass {
     (:lowmem)
     static const STORED_FIELDS = 6;
 
-    // Field count of the pre-2.2.0 flat storage format, kept for the
-    // one-time :fullmem migration in Hass.loadStoredEntities(). :fullmem's
-    // stride grew from 6 to 10 to persist select's options and
-    // input_number/number's min/max/step; :lowmem's never changed, so it
-    // has nothing to migrate (see Hass.STORAGE_KEY) and doesn't need this.
-    (:fullmem)
-    static const STORED_FIELDS_V2 = 6;
+    // The fewest slots a stored entity ever had: what :lowmem writes, and
+    // what :fullmem wrote before 2.2.0, when its stride grew to 10 to
+    // persist select's options and input_number/number's min/max/step. A
+    // stored Array says how many slots its entities have (see
+    // Hass.STORAGE_KEY); either tier reads both sizes - :lowmem the first
+    // six slots of ten, :fullmem a six-slot entity through
+    // createFromV2Storage().
+    static const STORED_FIELDS_MIN = 6;
 
     // The longest sensor-like value writeToStorage() keeps. Home Assistant
     // allows 255 characters; options, numbers and dates are far shorter,
@@ -73,23 +76,32 @@ module Hass {
       return offset + Entity.STORED_FIELDS;
     }
 
+    // Slots 4 and 5 (icon, device class) stay null: this tier has neither
+    // (see _mIcon). The slots remain, so both tiers agree on the first six.
     (:lowmem)
     function writeToStorage(target, offset) {
       target[offset]     = _mId;
       target[offset + 1] = _mName;
       target[offset + 2] = Entity.stateToString(_mState);
       target[offset + 3] = _mSensorClass;
-      target[offset + 4] = _mIcon;
-      target[offset + 5] = _mDeviceClass;
 
       return offset + Entity.STORED_FIELDS;
     }
 
+    // `stride` is the number of slots this entity has in `stored`. Anything
+    // but a String as the id - the null of an unused slot, or a damaged
+    // record - is no entity. (Lang.String, not String: a bare `String`
+    // resolves in an instance method such as setState(), but ends in
+    // "Symbol Not Found" in a static function.)
     (:fullmem)
-    static function createFromStorage(stored, offset) {
+    static function createFromStorage(stored, offset, stride) {
+      if (stride < STORED_FIELDS) {
+        return createFromV2Storage(stored, offset);
+      }
+
       var id = stored[offset];
 
-      if (id == null) {
+      if (!(id instanceof Lang.String)) {
         return null;
       }
 
@@ -97,7 +109,7 @@ module Hass {
 
       var entity = new Entity({
         :id => id,
-        :name => name != null ? name : id,
+        :name => name instanceof Lang.String ? name : id,
         :state => stored[offset + 2],
         :sensorClass => stored[offset + 3],
         :icon => stored[offset + 4],
@@ -132,11 +144,13 @@ module Hass {
       }
     }
 
+    // The first six slots are the same whatever the stride, and all this
+    // tier keeps.
     (:lowmem)
-    static function createFromStorage(stored, offset) {
+    static function createFromStorage(stored, offset, stride) {
       var id = stored[offset];
 
-      if (id == null) {
+      if (!(id instanceof Lang.String)) {
         return null;
       }
 
@@ -144,25 +158,22 @@ module Hass {
 
       return new Entity({
         :id => id,
-        :name => name != null ? name : id,
+        :name => name instanceof Lang.String ? name : id,
         :state => stored[offset + 2],
-        :sensorClass => stored[offset + 3],
-        :icon => stored[offset + 4],
-        :deviceClass => stored[offset + 5]
+        :sensorClass => stored[offset + 3]
       });
     }
 
-    // Reads one entity from the pre-2.2.0 flat format (6 slots per entity,
-    // keyed under "Hass/entities/v2"). Only used by the one-time :fullmem
-    // migration in Hass.loadStoredEntities(). The extended fields (options,
-    // min, max, step) don't exist in v2 and are left null here; the next
-    // entity refresh repopulates them from the live state via
-    // _applyExtendedAttributes().
+    // Reads a six-slot entity: the pre-2.2.0 flat format (keyed under
+    // "Hass/entities/v2"), or a record written by the 64 KB tier. The
+    // extended fields (options, min, max, step) don't exist there and are
+    // left null here; the next entity refresh repopulates them from the
+    // live state via _applyExtendedAttributes().
     (:fullmem)
     static function createFromV2Storage(stored, offset) {
       var id = stored[offset];
 
-      if (id == null) {
+      if (!(id instanceof Lang.String)) {
         return null;
       }
 
@@ -170,7 +181,7 @@ module Hass {
 
       return new Entity({
         :id => id,
-        :name => name != null ? name : id,
+        :name => name instanceof Lang.String ? name : id,
         :state => stored[offset + 2],
         :sensorClass => stored[offset + 3],
         :icon => stored[offset + 4],
@@ -179,7 +190,9 @@ module Hass {
     }
 
     // Reads the pre-2.0.4 storage format. Only used by the one-time migration
-    // in Hass.loadStoredEntities().
+    // in Hass._migrateStoredEntities() - on :fullmem; the 64 KB tier does
+    // not read that format any more.
+    (:fullmem)
     static function createFromDict(dict) {
       // Null safety: check for null or invalid dictionary
       if (dict == null) {
@@ -285,8 +298,17 @@ module Hass {
     hidden var _mExt; // Is this entity loaded from settings?
     hidden var _mSensorValue; // Custom state info text
     hidden var _mSensorClass; // Device class for sensor
-    hidden var _mIcon; // Home Assistant `icon` attribute (e.g. "mdi:movie-open")
-    hidden var _mDeviceClass; // Home Assistant `device_class` attribute (e.g. "battery")
+
+    // The Home Assistant `icon` attribute (e.g. "mdi:movie-open") and
+    // `device_class` attribute (e.g. "battery"), for the icon tables of
+    // Utils.getMdiIconDrawable(). The 64 KB tier has no such tables, never
+    // set either one (Hass._applyIconAttributes()) - and still carried both
+    // members, 12 bytes each in every entity, along with whatever string an
+    // earlier release had stored there. Neither exists on that tier now.
+    (:fullmem)
+    hidden var _mIcon;
+    (:fullmem)
+    hidden var _mDeviceClass;
 
     // select/input_select's `options` and input_number/number's
     // min/max/step/service domain - editing-only data, needed for the
@@ -318,8 +340,6 @@ module Hass {
       _mState = Entity.stringToState(entity[:state]);
       _mExt = entity[:ext] == true;
       _mSensorClass = entity[:sensorClass];
-      _mIcon = entity[:icon];
-      _mDeviceClass = entity[:deviceClass];
       _initExtendedFields(entity);
 
       // Null safety: prevent crash if _mId is null
@@ -438,6 +458,8 @@ module Hass {
 
     (:fullmem)
     hidden function _initExtendedFields(entity) {
+      _mIcon = entity[:icon];
+      _mDeviceClass = entity[:deviceClass];
       _mOptions = entity[:options];
       _mMin = entity[:min];
       _mMax = entity[:max];
@@ -572,19 +594,23 @@ module Hass {
     }
 
     // Home Assistant `icon` attribute (e.g. "mdi:movie-open"), or null when unset.
+    (:fullmem)
     function getIcon() {
       return _mIcon;
     }
 
+    (:fullmem)
     function setIcon(newIcon) {
       _mIcon = newIcon;
     }
 
     // Home Assistant `device_class` attribute (e.g. "battery"), or null when unset.
+    (:fullmem)
     function getDeviceClass() {
       return _mDeviceClass;
     }
 
+    (:fullmem)
     function setDeviceClass(newDeviceClass) {
       _mDeviceClass = newDeviceClass;
     }

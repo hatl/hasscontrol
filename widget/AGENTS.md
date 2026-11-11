@@ -7,8 +7,8 @@ The widget supports various Home Assistant entity types and handles both OAuth a
 - `App.mc`: Main application entry point, handles initialization and view management
 - `ViewController.mc`: Manages transitions between different views (EntityView, SceneView, etc.)
 - `hass/Client.mc`: Handles API communication with Home Assistant
-- `hass/Hass.mc`: Core module with entity management functionality
-- `hass/Entity.mc`: Entity class representing Home Assistant entities
+- `hass/Hass.mc`: Core module with entity management functionality - the entity list, its refresh chain and its storage (see Sync and Data Management)
+- `hass/Entity.mc`: Entity class representing Home Assistant entities. On the 64 KB tier an entity has no icon and no device class (`_mIcon`, `_mDeviceClass` and their accessors are `:fullmem`): every member costs 12 bytes in every entity
 - `hass/Constants.mc`: Constants for entity types, states, and errors
 - `hass/OAuthClient.mc`: Handles OAuth authentication flow
 - `hass/OauthCredentials.mc`: Manages storage and retrieval of authentication tokens
@@ -28,6 +28,8 @@ The widget supports various Home Assistant entity types and handles both OAuth a
 - Use camelCase for variables and methods
 - Prefix private/hidden variables with underscore (_variableName)
 - Use class prefix for enums and constants (e.g., `HASS_STATE_ON`, `ERROR_NOT_AUTHORIZED`)
+- `monkey.jungle` sets `base.sourcePath = source`: only `source/` is compiled. Code anywhere else in the project is not part of the build
+- Never put a call into an argument of `Utils.logMem()`, `Utils.debugLog()` and their siblings - not even `list.size()`. Their release variants are empty, and the compiler drops a call to them only when the arguments are literals, variables or lookups; with a call inside, the whole call site stays in release builds, code and label string included. Pass the list itself: an Array is logged as its size
 - Read settings with `Utils.getProperty(key, default)`, passing the default from `resources/properties.xml` - never `Properties.getValue()` directly: it throws `InvalidKeyException` for a key the stored settings do not have (after an app update that adds a setting, or with an older build's settings file in the simulator). `Properties.setValue()` is fine
 
 ## Classes and Modules
@@ -121,6 +123,7 @@ When adding a new entity type:
 - On fullmem, `Hass.refreshAllEntities()` silently does nothing without a direct connection (`_canRefresh()`, `WifiLte.hasDirectConnection()`): callers must not rely on the refresh finishing or on it removing a loader (see `Hass._buildImportedEntities()`). Only `ConnectionWait` refreshes once the connection is back, and only at launch
 - Support group-based entity import from Home Assistant
 - Handle transitional states with appropriate refresh timers
-- Store entities for offline access
+- Store entities for offline access. The list is stored as records of a few entities each (`Hass.STORAGE_KEY`, `Hass.storeEntities()`), never as one value: `Application.Storage` serialises a value inside the app's heap, an Out Of Memory error cannot be caught, and a list of two dozen entities written at once ended every refresh on a 64 KB watch in a crash. A record names its slots per entity, so either tier reads what the other wrote. When the stored form changes, teach `Hass._migrateStoredEntities()` the old one, delete old keys only after the new write went through, and test the upgrade (`CONTRIBUTING.md`; `f7_storage_upgrade`, `i2_storage_upgrade` in `tools/simtest`)
+- Two free-heap floors guard what cannot be caught: `Hass.MIN_FREE_MEMORY` before a request, an import step or a stored entity is added, and `Hass.STORE_MIN_FREE` before a write. A response callback runs while the parsed response is still in memory, so a check that fails there is repeated from the deferred job before the refresh gives up (`Hass._continueRefresh()`). Anything new that allocates in proportion to the entity list needs the same treatment - and a run of `tools/simtest/capacity.py` on a 64 KB device and on `instincte45mm` (128 KB with the full feature set)
 - Implement proper battery reporting to Home Assistant
 - Cache entity states to minimize network traffic

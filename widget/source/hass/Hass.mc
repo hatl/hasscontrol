@@ -6,27 +6,64 @@ using Toybox.Lang;
 using Utils;
 
 module Hass {
-  // v3: :fullmem's STORED_FIELDS grew from the old fixed 6-field stride to
-  // 10, to persist select's options and input_number/number's min/max/step
-  // (see Entity.mc). Bumped so a :fullmem device never misreads an old
-  // v2 (6-field) array with the new 10-field stride - offset math would
-  // silently pull the next entity's id/name into this one's tail fields.
-  // :lowmem's stride never changed (still 6), so it stays on v2 below -
-  // bumping it too would force every lowmem install to migrate for a
-  // format change that never applied to it.
-  (:fullmem)
-  const STORAGE_KEY = "Hass/entities/v3";
+  // The entity list is stored as records of up to STORE_CHUNK entities
+  // each, under STORAGE_KEY + "0", "1", ... - the list ends at the first
+  // missing record. A record is a flat Array: the number of slots per entity
+  // first (Entity.STORED_FIELDS of the build that wrote it), then that many
+  // slots for every entity (see Entity.writeToStorage()), null where unused.
+  //
+  // Why records: Application.Storage serialises a value inside the app's
+  // heap, and an Out Of Memory error cannot be caught. Written as one Array
+  // (up to 2.3.0), a list of 20 to 26 entities needed about 6 kB of free
+  // heap on an Instinct 2X, and every refresh - that is every launch - ended
+  // in a crash. One record needs a small, fixed amount whatever the size of
+  // the list (see STORE_MIN_FREE). It also keeps a long list clear of
+  // Storage's limit of 32 kB per value.
+  //
+  // Why the slot count is in the record: the two build tiers store a
+  // different number of slots. Reading it from the record lets either tier
+  // load what the other wrote, should a device ever move between them.
+  const STORAGE_KEY = "Hass/entities/v4/";
 
-  // The pre-2.2.0 flat-array key, read by loadStoredEntities()'s one-time
-  // migration below. :fullmem-only: on :lowmem, STORAGE_KEY is already
-  // this same key (see above), so there's nothing to migrate from.
+  // What earlier releases wrote, read once by _migrateStoredEntities(): one
+  // flat Array for the whole list - 10 slots per entity under v3 (:fullmem,
+  // 2.2.0 to 2.3.0), 6 under v2 (2.1.0, and :lowmem up to 2.3.0) - and
+  // before that one Dictionary per entity under the legacy key.
   (:fullmem)
+  const STORAGE_KEY_V3 = "Hass/entities/v3";
+
   const STORAGE_KEY_V2 = "Hass/entities/v2";
 
-  (:lowmem)
-  const STORAGE_KEY = "Hass/entities/v2";
-
+  (:fullmem)
   const STORAGE_KEY_LEGACY = "Hass/entities";
+
+  // Entities per record, and the free heap storeEntities() asks for before
+  // it writes. Measured in the simulator (Instinct 2X; the heap filled until
+  // a given amount was free, then one record built and written): a record
+  // needs free heap in proportion to its entities and their strings, with
+  // next to no fixed part -
+  //    6 slots per entity: 0.3 kB for 1 entity, 1.3 kB for 4, 1.8 kB for 6,
+  //      3.0 kB for 12, 5.7 kB for 24; 2.6 kB for 6 whose ids have 53 and
+  //      whose names have 39 characters
+  //   10 slots per entity: 3.3 kB for 12, 6.4 kB for 24; 6.3 kB for 8
+  //      selects with 20 options each
+  // Reading a record back takes about nine tenths of what writing it does.
+  //
+  // The floors leave room for a record of long names (:lowmem) or of
+  // nothing but large selects (:fullmem). On :lowmem the floor stays below
+  // MIN_FREE_MEMORY, so a list that could be refreshed can be stored. On
+  // :fullmem only the three 128 KB devices ever get near theirs.
+  (:lowmem)
+  const STORE_CHUNK = 4;
+
+  (:fullmem)
+  const STORE_CHUNK = 8;
+
+  (:lowmem)
+  const STORE_MIN_FREE = 3000;
+
+  (:fullmem)
+  const STORE_MIN_FREE = 10000;
 
   var client = null;
   var _entities = new [0];
@@ -35,6 +72,13 @@ module Hass {
   var _continueRefreshOnError = false;
   var _refreshActive = false;
   var _pendingImportIds = null;
+
+  // A refresh chain that stopped at the free-heap floor inside a response
+  // callback and goes on from the deferred job (see _continueRefresh()).
+  var _refreshPaused = false;
+
+  // Records in storage, as of the last load or store.
+  var _storedChunks = 0;
 
   // Free-heap floor, in bytes. Below this we stop allocating rather than let
   // the VM throw Out Of Memory. Measured on Instinct 2X (64 KB widget budget):
@@ -99,50 +143,72 @@ module Hass {
     return entity;
   }
 
+  // Writes the entity list, one record at a time (see STORAGE_KEY). Returns
+  // true when every record was written.
   function storeEntities() {
     Utils.logMem("storeEntities:enter", null);
 
-    // Serialising every entity briefly doubles the entity data. Skipping the
-    // write costs only the offline cache for this session - far better than an
-    // Out Of Memory crash at the end of an otherwise successful refresh.
-    if (Utils.freeMemory() < MIN_FREE_MEMORY) {
+    // Skipping the write costs only the offline copy of this session's
+    // changes - far better than an Out Of Memory crash. The records already
+    // stored stay valid.
+    if (Utils.freeMemory() < STORE_MIN_FREE) {
       Utils.debugLog("storeEntities: skipped, low memory", null, null);
-      return;
+      return false;
     }
 
-    // Size the array up front: growing it with add() would reallocate and copy
-    // repeatedly, which is its own peak on a device with a few KB to spare.
-    var count = 0;
+    var size = 1 + STORE_CHUNK * Entity.STORED_FIELDS;
+    var count = _entities.size();
+    var i = 0;
+    var chunks = 0;
 
-    for (var i = 0; i < _entities.size(); i++) {
-      if (!_entities[i].isExternal()) {
-        count++;
+    // Runs once for an empty list too: an empty record 0 says "stored, and
+    // empty", where no record at all sends the next launch looking for the
+    // lists of earlier releases (see loadStoredEntities()).
+    do {
+      var chunk = new [size];
+      var slot = 1;
+
+      chunk[0] = Entity.STORED_FIELDS;
+
+      while (i < count && slot < size) {
+        // External (settings-defined) entities are never stored.
+        if (!_entities[i].isExternal()) {
+          slot = _entities[i].writeToStorage(chunk, slot);
+        }
+        i++;
       }
-    }
 
-    var stored = new [count * Entity.STORED_FIELDS];
-    var slot = 0;
-
-    for (var i = 0; i < _entities.size(); i++) {
-      if (_entities[i].isExternal()) {
-        continue;
+      if (slot == 1 && chunks > 0) {
+        // Only external entities were left: no empty record at the end.
+        break;
       }
-      slot = _entities[i].writeToStorage(stored, slot);
+
+      // Application.Storage throws when the store has no room left. The
+      // records written so far stay, with the old ones behind them - all of
+      // them complete, and the next store puts it right.
+      try {
+        App.Storage.setValue(STORAGE_KEY + chunks, chunk);
+      } catch (e) {
+        Utils.debugLog("storeEntities: setValue failed", null, null);
+        return false;
+      }
+
+      // Released before the next one is built.
+      chunk = null;
+      chunks++;
+    } while (i < count);
+
+    // A shorter list: drop the records behind it, last first, so that what
+    // is stored is a run from record 0 at every moment.
+    while (_storedChunks > chunks) {
+      _storedChunks--;
+      App.Storage.deleteValue(STORAGE_KEY + _storedChunks);
     }
 
-    Utils.logMem("storeEntities:built n", count);
+    _storedChunks = chunks;
 
-    // Application.Storage throws for a value over 32 KB, or one the store
-    // has no room left for. Then the offline copy stays as it was - the
-    // same trade as the low-memory skip above.
-    try {
-      App.Storage.setValue(STORAGE_KEY, stored);
-    } catch (e) {
-      Utils.debugLog("storeEntities: setValue failed", null, null);
-      return;
-    }
-
-    Utils.logMem("storeEntities:done", null);
+    Utils.logMem("storeEntities:done n", chunks);
+    return true;
   }
 
   function loadScenesFromSettings() {
@@ -158,10 +224,7 @@ module Hass {
     var entitiesToRemove = new [0];
     for (var i = 0; i < _entities.size(); i++) {
       if (_entities[i].isExternal()) {
-        var oldIcon = _entities[i].getIcon();
-        if (oldIcon != null) {
-          preservedIcons[_entities[i].getId()] = oldIcon;
-        }
+        _keepIcon(_entities[i], preservedIcons);
         entitiesToRemove.add(_entities[i]);
       }
     }
@@ -187,116 +250,163 @@ module Hass {
         });
 
         // Restore the icon that was fetched before the rebuild (if any).
-        if (preservedIcons.hasKey(scenes[i][0])) {
-          newEntity.setIcon(preservedIcons[scenes[i][0]]);
-        }
+        _restoreIcon(newEntity, preservedIcons);
 
         _entities.add(newEntity);
       }
     }
   }
 
-  // :fullmem needs the v2 -> v3 migration below; :lowmem's STORAGE_KEY is
-  // already v2, so there's nothing to migrate and it keeps the plain read.
+  // The two halves of loadScenesFromSettings()'s icon snapshot. Entities
+  // have no icon on the 64 KB tier (see Entity._mIcon).
   (:fullmem)
-  function loadStoredEntities() {
-    _entities = new [0];
+  function _keepIcon(entity, icons) {
+    var icon = entity.getIcon();
 
-    var stored = App.Storage.getValue(STORAGE_KEY);
-
-    if (stored != null) {
-      for (var i = 0; i + Entity.STORED_FIELDS <= stored.size(); i += Entity.STORED_FIELDS) {
-        var entity = Entity.createFromStorage(stored, i);
-        // Filter out null entities (from corrupted or invalid data)
-        if (entity != null) {
-          _entities.add(entity);
-        }
-      }
-
-      // A leftover v2 key means the device was already on 2.2.0+ and
-      // recovered (or the migration below ran but the store-skip left v2
-      // behind). Current storage is authoritative; drop the stale copy.
-      if (App.Storage.getValue(STORAGE_KEY_V2) != null) {
-        App.Storage.deleteValue(STORAGE_KEY_V2);
-      }
-    } else if (App.Storage.getValue(STORAGE_KEY_V2) != null) {
-      // One-time migration of the 2.1.0-era format (see _migrateV2Entities).
-      _migrateV2Entities();
-    } else {
-      _loadLegacyStoredEntities();
+    if (icon != null) {
+      icons[entity.getId()] = icon;
     }
-
-    loadScenesFromSettings();
-
-    Utils.debugLog("Loaded entities: ", _entities.size(), " total");
   }
 
   (:lowmem)
+  function _keepIcon(entity, icons) {
+  }
+
+  (:fullmem)
+  function _restoreIcon(entity, icons) {
+    var id = entity.getId();
+
+    if (icons.hasKey(id)) {
+      entity.setIcon(icons[id]);
+    }
+  }
+
+  (:lowmem)
+  function _restoreIcon(entity, icons) {
+  }
+
+  // One function for both tiers.
   function loadStoredEntities() {
     _entities = new [0];
+    _storedChunks = 0;
 
-    var stored = App.Storage.getValue(STORAGE_KEY);
+    var chunk = App.Storage.getValue(STORAGE_KEY + 0);
 
-    if (stored == null) {
-      _loadLegacyStoredEntities();
-    } else {
-      for (var i = 0; i + Entity.STORED_FIELDS <= stored.size(); i += Entity.STORED_FIELDS) {
-        var entity = Entity.createFromStorage(stored, i);
-        // Filter out null entities (from corrupted or invalid data)
-        if (entity != null) {
-          _entities.add(entity);
-        }
-      }
+    if (chunk == null) {
+      // Nothing in this layout yet: an update from an earlier release, or a
+      // first launch. Leaves record 0 behind either way, so this runs once.
+      _migrateStoredEntities();
+    }
+
+    // Ends at the first missing record - or one that is no Array at all.
+    // Every record is counted, also when _addStored() takes nothing from it
+    // any more: the next store must know how many there are to drop.
+    while (chunk instanceof Lang.Array) {
+      _addStored(chunk, 0);
+      _storedChunks++;
+      chunk = null;
+      chunk = App.Storage.getValue(STORAGE_KEY + _storedChunks);
     }
 
     loadScenesFromSettings();
 
-    Utils.debugLog("Loaded entities: ", _entities.size(), " total");
+    Utils.debugLog("Loaded entities: ", _entities, " total");
   }
 
-  // Reads the 2.1.0-era flat array (Entity.STORED_FIELDS_V2 slots per
-  // entity) and rewrites it under the current key. 2.2.0 bumped the key
-  // without a migration, which made the 2.1.0 -> 2.2.0 update show
-  // "No entities configured" with a startup refresh that walks an empty
-  // list - the data was orphaned, not gone, so this recovers it.
-  (:fullmem)
-  function _migrateV2Entities() {
-    var stored = App.Storage.getValue(STORAGE_KEY_V2);
+  // Adds the entities of one stored Array. A record names its slots per
+  // entity in slot 0; the flat Arrays of earlier releases start with an
+  // entity id instead and have `stride` slots per entity.
+  //
+  // Stops at the free-heap floor, as the import does: a list that no longer
+  // fits - after an update that left less heap - comes up short instead of
+  // ending every launch in a crash. The next store then writes what did fit.
+  function _addStored(stored, stride) {
+    var i = 0;
 
-    if (stored == null) {
+    if (stored.size() > 0 && stored[0] instanceof Lang.Number) {
+      stride = stored[0];
+      i = 1;
+    }
+
+    if (stride < Entity.STORED_FIELDS_MIN) {
+      // Damaged. (And 0 would never end the loop below.)
       return;
     }
 
-    for (var i = 0; i + Entity.STORED_FIELDS_V2 <= stored.size(); i += Entity.STORED_FIELDS_V2) {
-      var entity = Entity.createFromV2Storage(stored, i);
-      if (entity != null) {
+    while (i + stride <= stored.size() && Utils.freeMemory() >= MIN_FREE_MEMORY) {
+      var entity = Entity.createFromStorage(stored, i, stride);
+
+      // An id that is there already: a store cut short after the group
+      // changed leaves new records in front of old ones, and an entity that
+      // moved between them is in both.
+      if (entity != null && getEntity(entity.getId()) == null) {
         _entities.add(entity);
       }
+      i += stride;
+    }
+  }
+
+  // Reads the list an earlier release stored (see STORAGE_KEY_V3) and writes
+  // it as records right away - at launch the heap is at its emptiest. The
+  // old keys go only once that write went through: a skipped write leaves
+  // them for the next launch to try again. (2.2.0 changed its key without
+  // reading the old one, and the update showed "No entities configured".)
+  (:fullmem)
+  function _migrateStoredEntities() {
+    var stride = Entity.STORED_FIELDS;
+    var stored = App.Storage.getValue(STORAGE_KEY_V3);
+
+    if (stored == null) {
+      stride = Entity.STORED_FIELDS_MIN;
+      stored = App.Storage.getValue(STORAGE_KEY_V2);
     }
 
-    Utils.debugLog("Migrated v2 entities: ", _entities.size(), " total");
+    if (stored instanceof Lang.Array) {
+      _addStored(stored, stride);
+    } else {
+      _loadLegacyStoredEntities();
+    }
 
-    storeEntities();
+    // Gone before the records are built.
+    stored = null;
 
-    // Drop the old key only once the new one is confirmed written. On a
-    // 64 KB device storeEntities() skips when free heap is below
-    // MIN_FREE_MEMORY - the normal state at startup there - and the
-    // in-memory list is what the rest of the app uses, so deleting v2 now
-    // would turn a recoverable skip into real data loss. Leaving it makes
-    // the next launch retry here instead: self-healing. A successful write
-    // leaves both keys present only until this delete, which is cheap.
-    if (App.Storage.getValue(STORAGE_KEY) != null) {
+    if (storeEntities()) {
+      App.Storage.deleteValue(STORAGE_KEY_V3);
+      App.Storage.deleteValue(STORAGE_KEY_V2);
+      App.Storage.deleteValue(STORAGE_KEY_LEGACY);
+    }
+
+    Utils.debugLog("Migrated entities: ", _entities, " total");
+  }
+
+  // The 64 KB tier only ever wrote v2 lists since 2.1.0. The Dictionary
+  // format before that is not read here: its reader costs more code than
+  // this tier can spare for a release that ran out of memory on it. Such an
+  // install starts with an empty list and imports its group again.
+  (:lowmem)
+  function _migrateStoredEntities() {
+    var stored = App.Storage.getValue(STORAGE_KEY_V2);
+
+    if (stored instanceof Lang.Array) {
+      _addStored(stored, Entity.STORED_FIELDS);
+    }
+
+    stored = null;
+
+    if (storeEntities()) {
       App.Storage.deleteValue(STORAGE_KEY_V2);
     }
   }
 
-  // One-time read of the pre-2.0.4 format (one Dictionary per entity). The
-  // next storeEntities() writes the compact form, so the old key is dropped
-  // here rather than kept in sync.
+  // Reads the pre-2.0.4 format (one Dictionary per entity). Its key is
+  // deleted by _migrateStoredEntities() once the records are written - not
+  // here, as it used to be: without a refresh to store the list again, that
+  // lost it.
+  (:fullmem)
   function _loadLegacyStoredEntities() {
     var stored = App.Storage.getValue(STORAGE_KEY_LEGACY);
 
-    if (stored == null) {
+    if (!(stored instanceof Lang.Array)) {
       return;
     }
 
@@ -306,12 +416,10 @@ module Hass {
         _entities.add(entity);
       }
     }
-
-    App.Storage.deleteValue(STORAGE_KEY_LEGACY);
   }
 
   function _onReceiveEntity(err, data) {
-    Utils.logMem("onReceiveEntity queue", _entitiesToRefresh.size());
+    Utils.logMem("onReceiveEntity queue", _entitiesToRefresh);
     if (err != null) {
       if (data != null && data[:context] != null && data[:context][:callback] != null) {
         data[:context][:callback].invoke(err, null);
@@ -515,11 +623,33 @@ module Hass {
       Scheduler.schedule(:transitional, Utils.method(Hass, :_refreshTransitionalEntities), 2000);
     }
 
+    _continueRefresh(false);
+  }
+
+  // The next step of a refresh chain. `released` says whether the response
+  // before it is gone: false inside a response callback, true from the
+  // deferred job.
+  function _continueRefresh(released) {
     if (_entitiesToRefresh.size() > 0 && Utils.freeMemory() < MIN_FREE_MEMORY) {
+      if (!released) {
+        // A response callback runs inside OAuthClient.onWebResponse(), whose
+        // frame still holds the parsed body - about 2 kB that are free again
+        // the moment this returns, and before the next response is parsed.
+        // Giving up here stopped a refresh 6 to 9 entities short of what the
+        // floor is meant to allow - and on a list loaded from storage, where
+        // the heap is as full at the first response as at the last, it
+        // stopped the whole refresh after one entity. So ask again from the
+        // deferred job; the cost is one timer round trip per step, and only
+        // this close to the floor.
+        _refreshPaused = true;
+        _scheduleDeferred();
+        return;
+      }
+
       // Not enough heap left to parse another response. Abandon the rest of
       // the chain; those entities keep their last known state instead of the
       // whole app dying mid-refresh.
-      Utils.debugLog("refresh: stopped early, low memory, ", _entitiesToRefresh.size(), " left");
+      Utils.debugLog("refresh: stopped early, low memory, ", _entitiesToRefresh, " left");
       _entitiesToRefresh = new [0];
     }
 
@@ -533,16 +663,16 @@ module Hass {
         refreshEntity(entity, Utils.method(Hass, :_refreshPendingEntities));
       } else {
         // Skip null entity and continue with next
-        _refreshPendingEntities(null, null);
+        _continueRefresh(released);
       }
     } else {
       _refreshActive = false;
 
       // Finish on a fresh stack rather than inline. This branch runs inside
       // OAuthClient.onWebResponse(), whose frame still holds the last parsed
-      // response body - a couple of KB. Serialising every entity for storage
-      // while that response is still live is the peak that runs a 64 KB device
-      // out of memory at the end of a group import.
+      // response body - a couple of KB. Storing the entities while that
+      // response is still live is a peak a 64 KB device cannot afford at the
+      // end of a group import.
       _scheduleDeferred();
     }
   }
@@ -555,14 +685,28 @@ module Hass {
     Scheduler.schedule(:deferred, Utils.method(Hass, :_runDeferred), Scheduler.MIN_DELAY);
   }
 
-  // The one :deferred job covers both kinds of deferred work: building an
-  // imported group and finishing a refresh. A pending import wins: it ends
+  // The one :deferred job covers all three kinds of deferred work: building
+  // an imported group, going on with a refresh chain that paused at the
+  // free-heap floor, and finishing a refresh. A pending import wins: it ends
   // by starting a refresh, which schedules the job again to finish - or,
   // without the phone, schedules it right away (see
   // _buildImportedEntities()).
   function _runDeferred() {
     if (_pendingImportIds != null) {
       _buildImportedEntities();
+      return;
+    }
+
+    if (_refreshPaused) {
+      _refreshPaused = false;
+
+      if (!_canRefresh()) {
+        // The connection went since the chain paused (or a Wi-Fi/LTE sync
+        // is pending): no request may go out now. End the chain here.
+        _entitiesToRefresh = new [0];
+      }
+
+      _continueRefresh(true);
       return;
     }
 
@@ -597,6 +741,11 @@ module Hass {
       return;
     }
     _refreshActive = true;
+
+    // A chain of the list before this one that is still paused must not go
+    // on from the deferred job next to this one (see _buildImportedEntities(),
+    // which starts over on a new list).
+    _refreshPaused = false;
 
     _entitiesToRefresh = new [0];
     _continueRefreshOnError = continueOnError == true;
@@ -662,7 +811,7 @@ module Hass {
     // just the id array keeps the ids (which the entities reference anyway)
     // and drops the rest of the response.
     _pendingImportIds = data[:body]["attributes"]["entity_id"];
-    Utils.logMem("import:parsed n", _pendingImportIds.size());
+    Utils.logMem("import:parsed n", _pendingImportIds);
 
     _scheduleDeferred();
   }
@@ -678,7 +827,7 @@ module Hass {
       return;
     }
 
-    Utils.logMem("import:build:enter n", ids.size());
+    Utils.logMem("import:build:enter n", ids);
 
     // Build against the *old* list so entities still in the group are reused.
     // Clearing _entities first (as this did) made getEntity() search an empty
@@ -711,7 +860,7 @@ module Hass {
     _entities = imported;
     ids = null;
 
-    Utils.logMem("import:build:done n", _entities.size());
+    Utils.logMem("import:build:done n", _entities);
 
     loadScenesFromSettings();
 

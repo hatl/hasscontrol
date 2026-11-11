@@ -152,9 +152,9 @@ class HassControlApp extends App.AppBase {
     Hass.initClient();
     Utils.logMem("init:3 client", null);
     Hass.loadStoredEntities();
-    Utils.logMem("init:4 stored n", Hass.getEntities().size());
+    Utils.logMem("init:4 stored n", Hass._entities);
     Hass.loadScenesFromSettings();
-    Utils.logMem("init:5 scenes n", Hass.getEntities().size());
+    Utils.logMem("init:5 scenes n", Hass._entities);
 
     var deviceSettings = System.getDeviceSettings();
     var view = null;
