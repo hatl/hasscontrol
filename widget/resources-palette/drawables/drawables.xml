@@ -8,82 +8,83 @@
              redraw of the card view. Wired up in monkey.jungle for the one
              device where that hurts: the Venu Sq, 16-bit colour in 64 KB.
              An icon that is added to resources/drawables but not here just
-             keeps its larger form there. -->
-        <bitmap id="Scene" filename="../../resources/drawables/scene.png" />
-        <bitmap id="LightOff" filename="../../resources/drawables/light_off.png" />
-        <bitmap id="LightOn" filename="../../resources/drawables/light_on.png" />
-        <bitmap id="SwitchOn" filename="../../resources/drawables/switch_on.png" />
-        <bitmap id="SwitchOff" filename="../../resources/drawables/switch_off.png" />
-        <bitmap id="ValveOpen" filename="../../resources/drawables/valve_open.png" />
-        <bitmap id="ValveClosed" filename="../../resources/drawables/valve_closed.png" />
-        <bitmap id="CheckboxOn" filename="../../resources/drawables/checkbox_on.png" />
-        <bitmap id="CheckboxOff" filename="../../resources/drawables/checkbox_off.png" />
-        <bitmap id="AutomationOn" filename="../../resources/drawables/automation_on.png" />
-        <bitmap id="AutomationOff" filename="../../resources/drawables/automation_off.png" />
-        <bitmap id="LockLocked" filename="../../resources/drawables/lock_locked.png" />
-        <bitmap id="LockUnlocked" filename="../../resources/drawables/lock_unlocked.png" />
-        <bitmap id="LockChanging" filename="../../resources/drawables/lock_changing.png" />
-        <bitmap id="CoverClosed" filename="../../resources/drawables/cover_closed.png" />
-        <bitmap id="CoverClosing" filename="../../resources/drawables/cover_closing.png" />
-        <bitmap id="CoverOpen" filename="../../resources/drawables/cover_open.png" />
-        <bitmap id="CoverOpening" filename="../../resources/drawables/cover_opening.png" />
-        <bitmap id="FanOn" filename="../../resources/drawables/fan_on.png" />
-        <bitmap id="FanOff" filename="../../resources/drawables/fan_off.png" />
-        <bitmap id="BinaryOn" filename="../../resources/drawables/binary_on.png" />
-        <bitmap id="BinaryOff" filename="../../resources/drawables/binary_off.png" />
-        <bitmap id="ScriptOff" filename="../../resources/drawables/script_off.png" />
-        <bitmap id="Unknown" filename="../../resources/drawables/unknown.png" />
-        <bitmap id="Button" filename="../../resources/drawables/button.png" />
-        <bitmap id="Temperature" filename="../../resources/drawables/temperature.png" />
-        <bitmap id="Humidity" filename="../../resources/drawables/humidity.png" />
-        <bitmap id="CO2" filename="../../resources/drawables/co2.png" />
-        <bitmap id="AirPM" filename="../../resources/drawables/molecule.png" />
-        <bitmap id="EnergyMeter" filename="../../resources/drawables/energy_meter.png" />
-        <bitmap id="WaterMeter" filename="../../resources/drawables/water_meter.png" />
-        <bitmap id="GasMeter" filename="../../resources/drawables/gas_meter.png" />
-        <bitmap id="MdiMovie" filename="../../resources/drawables/mdi_movie.png" />
-        <bitmap id="MdiMovieOff" filename="../../resources/drawables/mdi_movie_off.png" />
-        <bitmap id="MdiBluetooth" filename="../../resources/drawables/mdi_bluetooth.png" />
-        <bitmap id="MdiMusic" filename="../../resources/drawables/mdi_music.png" />
-        <bitmap id="MdiSleep" filename="../../resources/drawables/mdi_sleep.png" />
-        <bitmap id="MdiVacuum" filename="../../resources/drawables/mdi_vacuum.png" />
-        <bitmap id="MdiRadiator" filename="../../resources/drawables/mdi_radiator.png" />
-        <bitmap id="MdiRestart" filename="../../resources/drawables/mdi_restart.png" />
-        <bitmap id="MdiLightbulb" filename="../../resources/drawables/mdi_lightbulb.png" />
-        <bitmap id="MdiPowerPlug" filename="../../resources/drawables/mdi_power_plug.png" />
-        <bitmap id="MdiTelevision" filename="../../resources/drawables/mdi_television.png" />
-        <bitmap id="MdiSpeaker" filename="../../resources/drawables/mdi_speaker.png" />
-        <bitmap id="MdiCoffee" filename="../../resources/drawables/mdi_coffee.png" />
-        <bitmap id="MdiFridge" filename="../../resources/drawables/mdi_fridge.png" />
-        <bitmap id="MdiWasher" filename="../../resources/drawables/mdi_washer.png" />
-        <bitmap id="MdiThermostat" filename="../../resources/drawables/mdi_thermostat.png" />
-        <bitmap id="MdiHome" filename="../../resources/drawables/mdi_home.png" />
-        <bitmap id="MdiGarage" filename="../../resources/drawables/mdi_garage.png" />
-        <bitmap id="MdiDoor" filename="../../resources/drawables/mdi_door.png" />
-        <bitmap id="MdiWindow" filename="../../resources/drawables/mdi_window.png" />
-        <bitmap id="MdiBlinds" filename="../../resources/drawables/mdi_blinds.png" />
-        <bitmap id="MdiWeatherNight" filename="../../resources/drawables/mdi_weather_night.png" />
-        <bitmap id="MdiWeatherSunny" filename="../../resources/drawables/mdi_weather_sunny.png" />
-        <bitmap id="MdiBell" filename="../../resources/drawables/mdi_bell.png" />
-        <bitmap id="MdiShield" filename="../../resources/drawables/mdi_shield.png" />
-        <bitmap id="MdiKey" filename="../../resources/drawables/mdi_key.png" />
-        <bitmap id="MdiPlay" filename="../../resources/drawables/mdi_play.png" />
-        <bitmap id="MdiPause" filename="../../resources/drawables/mdi_pause.png" />
-        <bitmap id="MdiStop" filename="../../resources/drawables/mdi_stop.png" />
-        <bitmap id="MdiVolume" filename="../../resources/drawables/mdi_volume.png" />
-        <bitmap id="MdiFire" filename="../../resources/drawables/mdi_fire.png" />
-        <bitmap id="MdiSnowflake" filename="../../resources/drawables/mdi_snowflake.png" />
-        <bitmap id="MdiLeaf" filename="../../resources/drawables/mdi_leaf.png" />
-        <bitmap id="MdiBattery" filename="../../resources/drawables/mdi_battery.png" />
-        <bitmap id="MdiFood" filename="../../resources/drawables/mdi_food.png" />
-        <bitmap id="MdiSofa" filename="../../resources/drawables/mdi_sofa.png" />
-        <bitmap id="MdiDeskLamp" filename="../../resources/drawables/mdi_desk_lamp.png" />
-        <bitmap id="MdiKettle" filename="../../resources/drawables/mdi_kettle.png" />
-        <bitmap id="MdiWater" filename="../../resources/drawables/mdi_water.png" />
-        <bitmap id="MdiFormatListBulleted" filename="../../resources/drawables/mdi_format_list_bulleted.png" />
-        <bitmap id="MdiNumeric" filename="../../resources/drawables/mdi_numeric.png" />
-        <bitmap id="MdiCalendar" filename="../../resources/drawables/mdi_calendar.png" />
-        <bitmap id="MdiClockOutline" filename="../../resources/drawables/mdi_clock_outline.png" />
-        <bitmap id="MdiCalendarClock" filename="../../resources/drawables/mdi_calendar_clock.png" />
+             keeps its larger form there. dithering="none": with the default
+             the smoothed edges of the icons come out as speckles. -->
+        <bitmap id="Scene" filename="../../resources/drawables/scene.png" dithering="none" />
+        <bitmap id="LightOff" filename="../../resources/drawables/light_off.png" dithering="none" />
+        <bitmap id="LightOn" filename="../../resources/drawables/light_on.png" dithering="none" />
+        <bitmap id="SwitchOn" filename="../../resources/drawables/switch_on.png" dithering="none" />
+        <bitmap id="SwitchOff" filename="../../resources/drawables/switch_off.png" dithering="none" />
+        <bitmap id="ValveOpen" filename="../../resources/drawables/valve_open.png" dithering="none" />
+        <bitmap id="ValveClosed" filename="../../resources/drawables/valve_closed.png" dithering="none" />
+        <bitmap id="CheckboxOn" filename="../../resources/drawables/checkbox_on.png" dithering="none" />
+        <bitmap id="CheckboxOff" filename="../../resources/drawables/checkbox_off.png" dithering="none" />
+        <bitmap id="AutomationOn" filename="../../resources/drawables/automation_on.png" dithering="none" />
+        <bitmap id="AutomationOff" filename="../../resources/drawables/automation_off.png" dithering="none" />
+        <bitmap id="LockLocked" filename="../../resources/drawables/lock_locked.png" dithering="none" />
+        <bitmap id="LockUnlocked" filename="../../resources/drawables/lock_unlocked.png" dithering="none" />
+        <bitmap id="LockChanging" filename="../../resources/drawables/lock_changing.png" dithering="none" />
+        <bitmap id="CoverClosed" filename="../../resources/drawables/cover_closed.png" dithering="none" />
+        <bitmap id="CoverClosing" filename="../../resources/drawables/cover_closing.png" dithering="none" />
+        <bitmap id="CoverOpen" filename="../../resources/drawables/cover_open.png" dithering="none" />
+        <bitmap id="CoverOpening" filename="../../resources/drawables/cover_opening.png" dithering="none" />
+        <bitmap id="FanOn" filename="../../resources/drawables/fan_on.png" dithering="none" />
+        <bitmap id="FanOff" filename="../../resources/drawables/fan_off.png" dithering="none" />
+        <bitmap id="BinaryOn" filename="../../resources/drawables/binary_on.png" dithering="none" />
+        <bitmap id="BinaryOff" filename="../../resources/drawables/binary_off.png" dithering="none" />
+        <bitmap id="ScriptOff" filename="../../resources/drawables/script_off.png" dithering="none" />
+        <bitmap id="Unknown" filename="../../resources/drawables/unknown.png" dithering="none" />
+        <bitmap id="Button" filename="../../resources/drawables/button.png" dithering="none" />
+        <bitmap id="Temperature" filename="../../resources/drawables/temperature.png" dithering="none" />
+        <bitmap id="Humidity" filename="../../resources/drawables/humidity.png" dithering="none" />
+        <bitmap id="CO2" filename="../../resources/drawables/co2.png" dithering="none" />
+        <bitmap id="AirPM" filename="../../resources/drawables/molecule.png" dithering="none" />
+        <bitmap id="EnergyMeter" filename="../../resources/drawables/energy_meter.png" dithering="none" />
+        <bitmap id="WaterMeter" filename="../../resources/drawables/water_meter.png" dithering="none" />
+        <bitmap id="GasMeter" filename="../../resources/drawables/gas_meter.png" dithering="none" />
+        <bitmap id="MdiMovie" filename="../../resources/drawables/mdi_movie.png" dithering="none" />
+        <bitmap id="MdiMovieOff" filename="../../resources/drawables/mdi_movie_off.png" dithering="none" />
+        <bitmap id="MdiBluetooth" filename="../../resources/drawables/mdi_bluetooth.png" dithering="none" />
+        <bitmap id="MdiMusic" filename="../../resources/drawables/mdi_music.png" dithering="none" />
+        <bitmap id="MdiSleep" filename="../../resources/drawables/mdi_sleep.png" dithering="none" />
+        <bitmap id="MdiVacuum" filename="../../resources/drawables/mdi_vacuum.png" dithering="none" />
+        <bitmap id="MdiRadiator" filename="../../resources/drawables/mdi_radiator.png" dithering="none" />
+        <bitmap id="MdiRestart" filename="../../resources/drawables/mdi_restart.png" dithering="none" />
+        <bitmap id="MdiLightbulb" filename="../../resources/drawables/mdi_lightbulb.png" dithering="none" />
+        <bitmap id="MdiPowerPlug" filename="../../resources/drawables/mdi_power_plug.png" dithering="none" />
+        <bitmap id="MdiTelevision" filename="../../resources/drawables/mdi_television.png" dithering="none" />
+        <bitmap id="MdiSpeaker" filename="../../resources/drawables/mdi_speaker.png" dithering="none" />
+        <bitmap id="MdiCoffee" filename="../../resources/drawables/mdi_coffee.png" dithering="none" />
+        <bitmap id="MdiFridge" filename="../../resources/drawables/mdi_fridge.png" dithering="none" />
+        <bitmap id="MdiWasher" filename="../../resources/drawables/mdi_washer.png" dithering="none" />
+        <bitmap id="MdiThermostat" filename="../../resources/drawables/mdi_thermostat.png" dithering="none" />
+        <bitmap id="MdiHome" filename="../../resources/drawables/mdi_home.png" dithering="none" />
+        <bitmap id="MdiGarage" filename="../../resources/drawables/mdi_garage.png" dithering="none" />
+        <bitmap id="MdiDoor" filename="../../resources/drawables/mdi_door.png" dithering="none" />
+        <bitmap id="MdiWindow" filename="../../resources/drawables/mdi_window.png" dithering="none" />
+        <bitmap id="MdiBlinds" filename="../../resources/drawables/mdi_blinds.png" dithering="none" />
+        <bitmap id="MdiWeatherNight" filename="../../resources/drawables/mdi_weather_night.png" dithering="none" />
+        <bitmap id="MdiWeatherSunny" filename="../../resources/drawables/mdi_weather_sunny.png" dithering="none" />
+        <bitmap id="MdiBell" filename="../../resources/drawables/mdi_bell.png" dithering="none" />
+        <bitmap id="MdiShield" filename="../../resources/drawables/mdi_shield.png" dithering="none" />
+        <bitmap id="MdiKey" filename="../../resources/drawables/mdi_key.png" dithering="none" />
+        <bitmap id="MdiPlay" filename="../../resources/drawables/mdi_play.png" dithering="none" />
+        <bitmap id="MdiPause" filename="../../resources/drawables/mdi_pause.png" dithering="none" />
+        <bitmap id="MdiStop" filename="../../resources/drawables/mdi_stop.png" dithering="none" />
+        <bitmap id="MdiVolume" filename="../../resources/drawables/mdi_volume.png" dithering="none" />
+        <bitmap id="MdiFire" filename="../../resources/drawables/mdi_fire.png" dithering="none" />
+        <bitmap id="MdiSnowflake" filename="../../resources/drawables/mdi_snowflake.png" dithering="none" />
+        <bitmap id="MdiLeaf" filename="../../resources/drawables/mdi_leaf.png" dithering="none" />
+        <bitmap id="MdiBattery" filename="../../resources/drawables/mdi_battery.png" dithering="none" />
+        <bitmap id="MdiFood" filename="../../resources/drawables/mdi_food.png" dithering="none" />
+        <bitmap id="MdiSofa" filename="../../resources/drawables/mdi_sofa.png" dithering="none" />
+        <bitmap id="MdiDeskLamp" filename="../../resources/drawables/mdi_desk_lamp.png" dithering="none" />
+        <bitmap id="MdiKettle" filename="../../resources/drawables/mdi_kettle.png" dithering="none" />
+        <bitmap id="MdiWater" filename="../../resources/drawables/mdi_water.png" dithering="none" />
+        <bitmap id="MdiFormatListBulleted" filename="../../resources/drawables/mdi_format_list_bulleted.png" dithering="none" />
+        <bitmap id="MdiNumeric" filename="../../resources/drawables/mdi_numeric.png" dithering="none" />
+        <bitmap id="MdiCalendar" filename="../../resources/drawables/mdi_calendar.png" dithering="none" />
+        <bitmap id="MdiClockOutline" filename="../../resources/drawables/mdi_clock_outline.png" dithering="none" />
+        <bitmap id="MdiCalendarClock" filename="../../resources/drawables/mdi_calendar_clock.png" dithering="none" />
     </drawables>
 </resources>
