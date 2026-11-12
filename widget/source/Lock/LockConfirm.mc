@@ -1,10 +1,12 @@
 using Toybox.Application as App;
 using Toybox.Lang;
+using Toybox.System;
 using Toybox.WatchUi as Ui;
 using Hass;
 
 // Optional confirmation before a lock entity is locked or unlocked, set by
-// the "lockConfirmation" app setting: none, a yes/no question, or a PIN.
+// the "lockConfirmation" app setting: none, a yes/no question
+// (LockConfirmView), or a PIN.
 //
 // The PIN works like the Garmin Pay wallet passcode: four digits, entered
 // on PinEntryView, and three wrong entries in a row lock it. It stays locked
@@ -91,8 +93,8 @@ module LockConfirm {
       // question then follows: leaving the lock's confirmation to the
       // toggle's Wi-Fi/LTE check would let a change there silently turn
       // the question off.
-      var question = new Ui.Confirmation(verb + "\n" + entity.getRawName() + "?");
-      Ui.pushView(question, new LockConfirmDelegate(entity, question), Ui.SLIDE_IMMEDIATE);
+      var question = new LockConfirmView(verb, entity.getRawName());
+      Ui.pushView(question, new LockConfirmDelegate(question, entity), Ui.SLIDE_IMMEDIATE);
       return true;
     }
 
@@ -198,53 +200,26 @@ module LockConfirm {
   function onSettingsChanged() {
     dropStaleFailures(getPin());
   }
-}
 
-// The yes/no question.
-(:fullmem)
-class LockConfirmDelegate extends Ui.ConfirmationDelegate {
-  // How often run() waits another Scheduler.MIN_DELAY for the question to
-  // go, about half a second in all.
-  static const MAX_WAITS = 10;
+  // What LockConfirmView and PinEntryView share.
 
-  hidden var _mEntity;
-  hidden var _mState;
-  hidden var _mQuestion; // the Ui.Confirmation this answers, see run()
-  hidden var _mWaits;
-
-  function initialize(entity, question) {
-    ConfirmationDelegate.initialize();
-    _mEntity = entity;
-    _mState = entity.getState();
-    _mQuestion = question;
-    _mWaits = 0;
+  // The round sub-window in the top-right corner of the Instinct E and
+  // Instinct 3 (a Graphics.BoundingBox; getSubscreen() is 3.2.7+ and
+  // returns null without one), which a header keeps clear of. Not on round
+  // screens: the Instinct 3 AMOLED's sub-window is a virtual one, and a
+  // header moved left of it would run off the round edge.
+  function subscreen() {
+    if (Ui has :getSubscreen && System.getDeviceSettings().screenShape != System.SCREEN_SHAPE_ROUND) {
+      return Ui.getSubscreen();
+    }
+    return null;
   }
 
-  function onResponse(response) {
-    App.getApp().resetInactivityTimer();
-
-    if (response == Ui.CONFIRM_YES) {
-      // The system pops the Confirmation only after this returns. Toggling
-      // right here would push the loader first - and the pop meant for the
-      // Confirmation would then take the loader off instead.
-      Scheduler.schedule(:lockAction, method(:run), Scheduler.MIN_DELAY);
-    }
-
-    return true;
-  }
-
-  // When exactly the system pops the Confirmation after onResponse() is
-  // not documented. Where getCurrentView() tells (3.4.0+), the toggle waits
-  // for the question to be gone. After MAX_WAITS it goes ahead anyway, as
-  // it does without getCurrentView(): waiting longer would not help, and
-  // the confirmed action still happens.
-  function run() {
-    if (Ui has :getCurrentView && _mWaits < MAX_WAITS && Ui.getCurrentView()[0] == _mQuestion) {
-      _mWaits++;
-      Scheduler.schedule(:lockAction, method(:run), Scheduler.MIN_DELAY);
-      return;
-    }
-
-    LockConfirm.execute(_mEntity, _mState);
+  // An "x" in the colour set on `dc`: cancel.
+  function drawCross(dc, x, y, arm, pen) {
+    dc.setPenWidth(pen);
+    dc.drawLine(x - arm, y - arm, x + arm, y + arm);
+    dc.drawLine(x - arm, y + arm, x + arm, y - arm);
+    dc.setPenWidth(1);
   }
 }

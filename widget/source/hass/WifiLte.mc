@@ -278,8 +278,8 @@ module WifiLte {
     // The system pops the Confirmation only after onResponse() returned, and
     // the sync screen is to come up over the app's own view, not over the
     // question. Where the current view can be read (CIQ 3.4.0+), wait until
-    // the Confirmation is gone - as LockConfirmDelegate does - but not for
-    // ever: on firmware that keeps it up longer, go ahead anyway.
+    // the Confirmation is gone - but not for ever: on firmware that keeps it
+    // up longer, go ahead anyway.
     if (_confirmation != null && (Ui has :getCurrentView) && _launchTries < LAUNCH_TRIES) {
       var current = Ui.getCurrentView();
 
@@ -519,9 +519,9 @@ class WifiLteConfirmDelegate extends Ui.ConfirmationDelegate {
     if (response == Ui.CONFIRM_YES) {
       // The command is stored right away, but start() leaves startSync2()
       // to the Scheduler, which waits until this Confirmation is off the
-      // screen (see WifiLte.launchSync()), as LockConfirmDelegate does with
-      // its toggle. GarminHomeAssistant calls startSync2() right from here,
-      // which works on a Venu 2; how a widget fares on CIQ 3.x is untested.
+      // screen (see WifiLte.launchSync()). GarminHomeAssistant calls
+      // startSync2() right from here, which works on a Venu 2; how a widget
+      // fares on CIQ 3.x is untested.
       WifiLte.start(_mCommand);
     }
 

@@ -35,7 +35,7 @@ from PIL import Image
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from ciqsim import Sim, Mock, Report, MOCK_HTTP, MOCK_HTTPS, S, VARIANTS, LOWMEM, log
 
-MASTER_PRG = os.path.join(S, "out", "master-fenix7x-debug.prg")   # built by build-master.sh
+OLD_PRG = os.path.join(S, "out", "v230-fenix7x-debug.prg")   # release 2.3.0, built by build-master.sh
 
 # Entities of the mock, in group order - the widget shows them in this order, so `index` below is how
 # many "down" presses reach an entity from the first one.
@@ -209,45 +209,107 @@ def f7_lock_no_confirmation(sim, rep):
     rep.shot("after-toggle")
 
 
-@scenario("fenix7x", "f7_lock_yesno", "lock confirmation")
-def f7_lock_yesno(sim, rep):
-    """Yes/no mode: Cancel sends nothing and leaves the lock alone, Confirm unlocks it."""
-    m = sim.mock_http
+def lock_question_up(sim):
+    """Is the lock question on screen?  Its first line is the action, and the entity view never says
+    "Unlock"."""
+    return re.search(r"unlock", sim.ocr(), re.I) is not None
+
+
+def lock_question(sim, rep, m):
+    """Start from a locked door, select it and check that the question came up."""
     m.reset()
     m.set("lock.front_door", "locked")       # start from a known state, whatever ran before
-    since, _ = fresh(sim, m, "lockyn")
+    since, launched = fresh(sim, m, "lockyn")
+    rep.check(launched, "the widget opened")
     wait_entities(sim, m)
     rep.check(m.state("lock.front_door") == "locked", "the door starts locked",
               m.state("lock.front_door"))
-
-    mark = time.time()
     sim.select()
     time.sleep(1.5)
     ok, txt = sim.wait_text(r"front\s*door", timeout=8)
-    rep.check(ok, "a question about the door is shown", repr(txt))
-    head = sim.header_text()
-    rep.check(re.search(r"unlock", head, re.I) is not None,
-              "the question is 'Unlock Front Door?'", repr(head))
-    rep.shot("question")
+    rep.check(ok and re.search(r"unlock", txt, re.I) is not None,
+              "the question is 'Unlock Front Door?'", repr(txt))
 
-    sim.confirm(False)
-    time.sleep(2.0)
-    no_service_call(rep, m, mark, "when the question is cancelled")
-    rep.check(m.state("lock.front_door") == "locked", "the door is still locked after Cancel",
-              m.state("lock.front_door"))
-    rep.shot("after-cancel")
 
-    mark = time.time()
-    sim.select()
-    time.sleep(1.5)
-    sim.confirm(True)
+def lock_unlocked(sim, rep, m, mark, how):
     call = m.wait_request("lock/unlock", timeout=10, since=mark, method="POST")
-    rep.check(call is not None, "confirming sends lock/unlock",
-              f"calls: {services_called(m, mark)}")
+    rep.check(call is not None, f"{how} sends lock/unlock", f"calls: {services_called(m, mark)}")
     time.sleep(4)
     rep.check(m.state("lock.front_door") == "unlocked", "the door ends up unlocked",
               m.state("lock.front_door"))
     rep.shot("after-confirm")
+    rep.check(not sim.crashed(), "no crash")
+
+
+@scenario("fenix7x", "f7_lock_yesno", "lock confirmation")
+def f7_lock_yesno(sim, rep):
+    """Yes/no mode with the buttons: the question comes up with the focus on cancel, so the select
+    button alone - the second press of an accidental double press - leaves the lock alone.  Back
+    cancels as well; down, then select unlocks."""
+    m = sim.mock_http
+    lock_question(sim, rep, m)
+    mark = time.time()
+    rep.check(sim.lock_focus() == "cancel", "the focus starts on cancel", str(sim.lock_focus()))
+    rep.shot("question")
+
+    sim.key("enter")
+    time.sleep(2.0)
+    rep.check(not lock_question_up(sim), "select alone closes the question")
+    no_service_call(rep, m, mark, "when select is pressed twice in a row")
+    rep.check(m.state("lock.front_door") == "locked", "the door is still locked",
+              m.state("lock.front_door"))
+    rep.shot("after-select")
+
+    sim.select()
+    time.sleep(1.5)
+    sim.back()
+    time.sleep(2.0)
+    rep.check(not lock_question_up(sim), "back closes the question")
+    no_service_call(rep, m, mark, "when the question is left with back")
+
+    mark = time.time()
+    sim.select()
+    time.sleep(1.5)
+    sim.key("down")
+    rep.check(sim.lock_focus() == "confirm", "down moves the focus to confirm", str(sim.lock_focus()))
+    rep.shot("focus-on-confirm")
+    sim.key("up")
+    rep.check(sim.lock_focus() == "cancel", "up moves it back to cancel", str(sim.lock_focus()))
+    sim.key("down")
+    no_service_call(rep, m, mark, "while the focus is only moved")
+    sim.key("enter")
+    lock_unlocked(sim, rep, m, mark, "select on confirm")
+
+
+@scenario("fenix7x", "f7_lock_yesno_touch", "lock confirmation")
+def f7_lock_yesno_touch(sim, rep):
+    """Yes/no mode by touch: a tap next to the keys is no answer, a tap on the cross cancels, and a
+    double tap - the first opens the question, the second lands where the check mark is - does not
+    confirm it.  A tap on the check mark a moment later does."""
+    m = sim.mock_http
+    lock_question(sim, rep, m)
+    mark = time.time()
+    cancel, confirm = sim.lock_key(False), sim.lock_key(True)
+    w, h = sim.display_size()
+
+    sim.tap(w // 2, confirm[1])
+    time.sleep(1.0)
+    rep.check(lock_question_up(sim), "a tap between the keys leaves the question up")
+    sim.tap(*cancel)
+    time.sleep(1.5)
+    rep.check(not lock_question_up(sim), "a tap on the cross closes it")
+    no_service_call(rep, m, mark, "after a tap between the keys and one on the cross")
+
+    sim.tap(*confirm, hold_ms=40, settle=0.1)     # on the entity view: selects the lock
+    sim.tap(*confirm, hold_ms=40, settle=0.1)     # on the question, a fifth of a second later
+    time.sleep(1.5)
+    rep.check(lock_question_up(sim), "after a double tap the question is up, unanswered")
+    no_service_call(rep, m, mark, "when the second tap of a double tap lands on the check mark")
+    rep.shot("after-double-tap")
+
+    mark = time.time()
+    sim.tap(*confirm)
+    lock_unlocked(sim, rep, m, mark, "a tap on the check mark")
 
 
 @scenario("fenix7x", "f7_lock_pin_ok", "lock confirmation")
@@ -456,6 +518,45 @@ def f7_wifi_offer_and_cancel(sim, rep):
     rep.check(not sim.crashed(), "no crash")
 
 
+@scenario("fenix7x", "f7_lock_yesno_wifi", "lock confirmation")
+def f7_lock_yesno_wifi(sim, rep):
+    """Yes/no mode without the phone: the lock's own question comes first, the Wi-Fi/LTE question
+    after it, and cancelling the second one sends nothing."""
+    m = sim.mock_https
+    m.reset()
+    m.set("lock.front_door", "locked")
+    sim.set_ble("Connected")
+    sim.set_wifi("Not Connected")
+    sim.push(f"{VARIANTS}/wifi-lockyn-{sim.device}.prg")
+    sim.launch()
+    rep.check(wait_entities(sim, m), "the entities were fetched over https")
+
+    sim.set_ble("Not Connected")
+    time.sleep(1)
+    mark = time.time()
+    sim.select()
+    time.sleep(1.5)
+    txt = sim.ocr()
+    rep.check(re.search(r"unlock", txt, re.I) is not None and re.search(r"wi-?\s*fi|lte", txt, re.I) is None,
+              "the lock's own question comes first", repr(txt))
+    rep.check(sim.lock_focus() == "cancel", "its focus starts on cancel", str(sim.lock_focus()))
+    rep.shot("lock-question")
+
+    sim.lock_answer(True)
+    ok, txt = sim.wait_text(r"wi-?\s*fi|lte", timeout=10)
+    rep.check(ok, "the Wi-Fi/LTE question follows", repr(txt))
+    rep.shot("wifi-question")
+    no_service_call(rep, m, mark, "while the Wi-Fi/LTE question is open")
+
+    sim.confirm(False)
+    time.sleep(2)
+    no_service_call(rep, m, mark, "when the Wi-Fi/LTE question is cancelled")
+    rep.check(m.state("lock.front_door") == "locked", "the door is still locked",
+              m.state("lock.front_door"))
+    rep.shot("after-cancel")
+    rep.check(not sim.crashed(), "no crash")
+
+
 @scenario("fenix7x", "f7_wifi_confirm_starts_sync", "Wi-Fi/LTE")
 def f7_wifi_confirm_starts_sync(sim, rep):
     """Confirming the Wi-Fi/LTE question hands the action to a system sync, which sends it.
@@ -527,23 +628,23 @@ def f7_timers_rapid_actions(sim, rep):
 def f7_stale_settings(sim, rep):
     """The crash you hit: settings stored by an older build lack the new keys.
 
-    The master build is pushed first so the simulator stores its settings, then the branch build runs
-    on top of them without clearing them."""
+    A build of release 2.3.0 is pushed first so the simulator stores its settings, then the current
+    build runs on top of them without clearing them."""
     m = sim.mock_http
     m.reset()
-    if not os.path.exists(MASTER_PRG):
-        rep.check(False, "the master build is available", MASTER_PRG)
+    if not os.path.exists(OLD_PRG):
+        rep.check(False, "the build of release 2.3.0 is available (build-master.sh)", OLD_PRG)
         return
     sim.set_ble("Connected")
-    sim.push(MASTER_PRG)
+    sim.push(OLD_PRG)
     sim.launch()
     time.sleep(6)
-    rep.shot("master-running")
+    rep.shot("2.3.0-running")
 
     crash_mark = sim.crash_mark()
     sim.push(f"{VARIANTS}/base-{sim.device}.prg", fresh_settings=False, fresh_storage=False)
     launched = sim.launch()
-    rep.check(launched, "the branch build starts on settings written by the old build")
+    rep.check(launched, "the current build starts on settings written by the old build")
     time.sleep(3)
     sim.key("enter")              # the lock - this is where LockConfirm reads lockConfirmation
     time.sleep(3)
@@ -580,6 +681,33 @@ def vq_lock_pin_keypad(sim, rep):
     call = m.wait_request("lock/unlock", timeout=10, since=mark)
     rep.check(call is not None, "tapping the PIN unlocks the door")
     rep.shot("after-unlock")
+
+
+@scenario("venusq2", "vq_lock_yesno", "lock confirmation")
+def vq_lock_yesno(sim, rep):
+    """Yes/no mode on a touch watch without up/down buttons: no key has the focus, the select button
+    answers nothing, and the keys are tapped."""
+    m = sim.mock_http
+    lock_question(sim, rep, m)
+    mark = time.time()
+    rep.check(sim.lock_focus() is None, "neither key has the focus", str(sim.lock_focus()))
+    rep.shot("question")
+
+    sim.key("enter")
+    time.sleep(1.5)
+    rep.check(lock_question_up(sim), "the select button leaves the question up")
+    no_service_call(rep, m, mark, "when the select button is pressed on the question")
+
+    sim.lock_answer(False)
+    time.sleep(1.0)
+    rep.check(not lock_question_up(sim), "a tap on the cross closes the question")
+    no_service_call(rep, m, mark, "when the question is cancelled")
+
+    mark = time.time()
+    sim.select()
+    time.sleep(1.5)
+    sim.lock_answer(True)
+    lock_unlocked(sim, rep, m, mark, "a tap on the check mark")
 
 
 @scenario("venusq2", "vq_wifi_without_radio", "Wi-Fi/LTE")
@@ -699,6 +827,30 @@ def fr_lock_pin_wheel(sim, rep):
     rep.check(not sim.crashed(), "no crash")
 
 
+@scenario("fr255", "fr_lock_yesno", "lock confirmation")
+def fr_lock_yesno(sim, rep):
+    """Yes/no mode on a watch without a touchscreen: select alone cancels, down and select unlock."""
+    m = sim.mock_http
+    lock_question(sim, rep, m)
+    mark = time.time()
+    rep.check(sim.lock_focus() == "cancel", "the focus starts on cancel", str(sim.lock_focus()))
+    rep.shot("question")
+
+    sim.lock_answer(False)
+    time.sleep(1.0)
+    rep.check(not lock_question_up(sim), "select alone closes the question")
+    no_service_call(rep, m, mark, "when select is pressed twice in a row")
+
+    mark = time.time()
+    sim.key("enter")
+    time.sleep(1.5)
+    sim.key("down")
+    rep.check(sim.lock_focus() == "confirm", "down moves the focus to confirm", str(sim.lock_focus()))
+    rep.shot("focus-on-confirm")
+    sim.key("enter")
+    lock_unlocked(sim, rep, m, mark, "select on confirm")
+
+
 # ============================================================================ instinct2x (64 KB)
 @scenario("instinct2x", "i2_https_entities", "low memory")
 def i2_https_entities(sim, rep):
@@ -765,8 +917,8 @@ def i2_timers_rapid_actions(sim, rep):
 def i2_phone_lost(sim, rep):
     """64 KB devices must behave exactly as before: no waiting loader, and the stored entities shown.
 
-    Checked side by side with a build of master in this same scenario, because the only change meant
-    for this tier is the timer fix."""
+    Checked side by side with a build of release 2.3.0 in this same scenario, because the only change
+    meant for this tier there is the timer fix."""
     m = sim.mock_https
     m.reset()
     sim.set_ble("Connected")
@@ -776,7 +928,7 @@ def i2_phone_lost(sim, rep):
     sim.set_ble("Not Connected")
 
     seen = {}
-    for tag, prg in (("master", "master"), ("branch", "base")):
+    for tag, prg in (("2.3.0", "v230"), ("current", "base")):
         path = f"{VARIANTS}/{prg}-{sim.device}.prg"
         if not os.path.exists(path):
             rep.check(False, f"the {tag} build is available", path)
@@ -794,11 +946,11 @@ def i2_phone_lost(sim, rep):
         rep.check(sim.running(), f"{tag}: the widget stays open")
         rep.check(seen[tag][3] == 0, f"{tag}: nothing was sent without the phone")
 
-    rep.check(seen["master"][2] == seen["branch"][2],
-              "master and the branch run under the same memory budget",
-              f"master {seen['master'][1]}/{seen['master'][2]} kB, branch {seen['branch'][1]}/{seen['branch'][2]} kB")
-    sim.note(f"memory without the phone: master {seen['master'][1]} kB, branch {seen['branch'][1]} kB "
-             f"of {seen['branch'][2]} kB")
+    rep.check(seen["2.3.0"][2] == seen["current"][2],
+              "2.3.0 and the current build run under the same memory budget",
+              f"2.3.0 {seen['2.3.0'][1]}/{seen['2.3.0'][2]} kB, current {seen['current'][1]}/{seen['current'][2]} kB")
+    sim.note(f"memory without the phone: 2.3.0 {seen['2.3.0'][1]} kB, current {seen['current'][1]} kB "
+             f"of {seen['current'][2]} kB")
     sim.set_ble("Connected")
 
 
@@ -2062,7 +2214,8 @@ def vq_loader_back(sim, rep):
 # an Out Of Memory error cannot be caught: past some two dozen entities every refresh on a 64 KB
 # watch ended in a crash.
 #
-# Builds: base-<device>.prg, and master-<device>.prg from build-master.sh (master, pointed at the mock).
+# Builds: base-<device>.prg, and v230-<device>.prg from build-master.sh (release 2.3.0, the last one
+# that stored the list as one array, pointed at the mock).
 def state_gets(mock, since):
     """The entity ids (group included) the widget asked the mock for since `since`, in order."""
     return [e["path"].rsplit("/", 1)[-1] for e in mock.requests(since)
@@ -2104,29 +2257,30 @@ def relaunch_on_storage(sim, mock, variant="base"):
 
 
 def _storage_upgrade(sim, rep, mock, old_key):
-    """master imports the group and stores it its way; the current build then starts on that storage,
-    must load the list without importing it again, and must leave it behind as records.  The master
-    build talks to the TLS mock on every device (it knows no plain http), the current one to `mock`."""
+    """Release 2.3.0 imports the group and stores it its way; the current build then starts on that
+    storage, must load the list without importing it again, and must leave it behind as records.  The
+    2.3.0 build talks to the TLS mock on every device (it knows no plain http), the current one to
+    `mock`."""
     crash_mark = sim.crash_mark()
-    master = f"{VARIANTS}/master-{sim.device}.prg"
-    if not os.path.exists(master):
-        rep.check(False, "the master build is available (build-master.sh)", master)
+    old = f"{VARIANTS}/v230-{sim.device}.prg"
+    if not os.path.exists(old):
+        rep.check(False, "the build of release 2.3.0 is available (build-master.sh)", old)
         return
     old_mock = sim.mock_https
     old_mock.reset()
     mock.reset()
     since = time.time()
-    sim.push(master)
+    sim.push(old)
     sim.launch()
-    rep.check(wait_entities(sim, old_mock), "master imported the group")
+    rep.check(wait_entities(sim, old_mock), "2.3.0 imported the group")
     wait_quiet(old_mock, since)
     time.sleep(3)
     keys = stored_keys(sim)
-    rep.check(old_key in keys, f"master stored the list under {old_key}", str(sorted(keys)))
-    rep.shot("master")
+    rep.check(old_key in keys, f"2.3.0 stored the list under {old_key}", str(sorted(keys)))
+    rep.shot("2.3.0")
 
     launched, gets = relaunch_on_storage(sim, mock)
-    rep.check(launched, "the current build starts on master's storage")
+    rep.check(launched, "the current build starts on the storage of 2.3.0")
     rep.check("group.garmin" not in gets, "the stored list was loaded: the group was not imported again",
               str(gets[:3]))
     rep.check(sorted(gets) == sorted(ENTITIES), "every entity of the list was refreshed, each once",
@@ -2146,14 +2300,14 @@ def _storage_upgrade(sim, rep, mock, old_key):
         rep.check(sim.wait_log(rf"Loaded entities: {len(ENTITIES)} total", timeout=3) is not None,
                   f"the app log reports {len(ENTITIES)} loaded entities")
 
-    # The old key is gone: master, started once more on this storage, finds no list of its own and
+    # The old key is gone: 2.3.0, started once more on this storage, finds no list of its own and
     # imports the group.  (The storage file cannot tell - it keeps the bytes of deleted values.)  It
     # also shows what a step back to the older release does: an import, not a crash.
     since = time.time()
-    sim.push(master, fresh_settings=True, fresh_storage=False)
+    sim.push(old, fresh_settings=True, fresh_storage=False)
     sim.launch()
     back = old_mock.wait_request(r"group\.garmin", timeout=25, since=since) is not None
-    rep.check(back, f"{old_key} is gone: master finds no list on this storage and imports the group")
+    rep.check(back, f"{old_key} is gone: 2.3.0 finds no list on this storage and imports the group")
     wait_quiet(old_mock, since)
     check_no_crash(rep, sim, crash_mark)
 

@@ -1,26 +1,28 @@
 #!/usr/bin/env bash
-# Builds the widget as it is on master (or on another ref), for the scenarios that run an older build
-# first and the current one on top of what it left behind:
-#   work/out/master-<device>-debug.prg    plain, no setting overrides - f7_stale_settings runs it so
-#                                         the simulator stores its settings
-#   work/variants2/master-<device>.prg    pointed at the TLS mock, https://127.0.0.1:8124, on every device
-#                                         (plain http to a loopback host is newer than master; fullmem:
-#                                         debug, lowmem: release) - i2_phone_lost and the storage upgrade
-#                                         scenarios
-# usage: [REF=master] [NAME=master] [FULL="fenix7x"] [LOW="instinct2x"] build-master.sh [device ...]
+# Builds an older state of the widget, for the scenarios that run an older build first and the current
+# one on top of what it left behind.  By default that is release 2.3.0: the last one that stored the
+# entity list as one array, and the last one without the lock, Wi-Fi/LTE and date/time settings.
+# (It used to be master, which was the same thing until those changes were merged into it.)
+#   work/out/v230-<device>-debug.prg    plain, no setting overrides - f7_stale_settings runs it so
+#                                       the simulator stores its settings
+#   work/variants2/v230-<device>.prg    pointed at the TLS mock, https://127.0.0.1:8124, on every device
+#                                       (plain http to a loopback host is newer than 2.3.0; fullmem:
+#                                       debug, lowmem: release) - i2_phone_lost and the storage upgrade
+#                                       scenarios
+# usage: [REF=v2.3.0] [NAME=v230] [FULL="fenix7x"] [LOW="instinct2x"] build-master.sh [device ...]
 #        (the devices are those of the plain build, fenix7x by default)
 #        REF=v2.1.0 NAME=v210 build-master.sh     builds that release as v210-<device>.prg
 set -u
 HERE=$(cd "$(dirname "$0")" && pwd)
 WORK=${CIQ_WORK:-$HERE/work}
 REPO=$(git -C "$HERE" rev-parse --show-toplevel)
-REF=${REF:-master}
-NAME=${NAME:-master}
+REF=${REF:-v2.3.0}
+NAME=${NAME:-v230}
 FULL=${FULL:-fenix7x}
 LOW=${LOW:-instinct2x}
 OUT=${OUT:-$WORK/variants2}
 SRC="$WORK/$NAME-src"
-# A clone that has only checked out a feature branch knows master as origin/master.
+# A clone that has only checked out a feature branch knows a branch as origin/<branch>.
 git -C "$REPO" rev-parse -q --verify "$REF^{commit}" > /dev/null || REF="origin/$REF"
 rm -rf "$SRC"; mkdir -p "$SRC" "$WORK/out" "$OUT"
 git -C "$REPO" archive "$REF" widget | tar -x -C "$SRC" --strip-components=1 || { echo "FAIL $NAME: cannot export $REF"; exit 1; }

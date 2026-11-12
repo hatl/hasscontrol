@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Every build the automated run needs, from this tree and from master: the settings variants, the
-# date/time variants and the builds of master.  Takes a quarter of an hour.
+# Every build the automated run needs, from this tree and from release 2.3.0: the settings variants,
+# the date/time variants and the builds of the older release.  Takes a quarter of an hour.
 # usage: build-all.sh          then: runall.sh
 set -u
 HERE=$(cd "$(dirname "$0")" && pwd)

@@ -272,10 +272,15 @@ e.g., "my_garmin_device"
 **Confirm before locking/unlocking a lock**: What happens when you select a `lock` entity:
 
 - `Off` (default): it is locked or unlocked right away.
-- `Yes/no question`: the watch asks first, e.g. `Unlock Front Door?`. When the action has to go out [over Wi-Fi/LTE](#without-the-phone-waiting-wi-fi-and-lte), its `... via Wi-Fi/LTE?` question follows.
+- `Yes/no question`: the watch asks first, e.g. `Unlock Front Door?`, with two keys under it: a cross to cancel and a check mark to confirm. When the action has to go out [over Wi-Fi/LTE](#without-the-phone-waiting-wi-fi-and-lte), its `... via Wi-Fi/LTE?` question follows.
 - `PIN`: you enter the PIN set in **Lock PIN** first (over Wi-Fi/LTE, the Wi-Fi/LTE question follows).
 
 Nothing is asked when the action could not be sent anyway: without the phone (and without Wi-Fi/LTE) you get `Phone not connected`, and when the widget is logged out, selecting a lock starts the login - select the lock again afterwards.
+
+The question is there to keep a lock from being operated by accident, so it cannot be answered with yes by accident either:
+
+- With **buttons**, the cross is selected when the question comes up. Pressing select once more - the second press of an accidental double press - only cancels. To confirm, press up or down to move to the check mark, then select. Back cancels as well.
+- On a **touchscreen** you tap the check mark or the cross; a tap anywhere else does nothing. A tap on the check mark in the first half second is ignored, so a double tap cannot answer the question it has just opened. Watches without up/down buttons (e.g. Venu, vívoactive, Edge 1040) have no preselected key, and their select button does nothing here.
 
 **Lock PIN**: Exactly four digits, masked as you type them. If `PIN` is selected but no valid PIN is set, locks cannot be operated from the watch at all (`Lock PIN not set or not 4 digits`) - the widget does not fall back to no PIN.
 

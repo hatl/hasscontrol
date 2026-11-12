@@ -8,4 +8,6 @@ SDK=${CIQ_SDK:-$(cat "$HOME/.Garmin/ConnectIQ/current-sdk.cfg")}
 KEY=${CIQ_KEY:-$HOME/Programme/connectiq-sdk-manager/developer_key}
 EXTRA=()
 if [ "$MODE" = "release" ]; then EXTRA=(-r -O2); fi
-cd "$DIR" && java -jar "$SDK/bin/monkeybrains.jar" -o "$OUT" -f monkey.jungle -y "$KEY" -d "$DEV" -w -l 0 --build-stats 1 "${EXTRA[@]}" "$@" 2>&1
+# Headless: where a launcher icon has to be scaled the compiler uses AWT, which otherwise wants an X
+# display - and there is none under sandbox.sh.
+cd "$DIR" && java -Djava.awt.headless=true -jar "$SDK/bin/monkeybrains.jar" -o "$OUT" -f monkey.jungle -y "$KEY" -d "$DEV" -w -l 0 --build-stats 1 "${EXTRA[@]}" "$@" 2>&1

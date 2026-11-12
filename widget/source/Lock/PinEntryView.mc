@@ -71,15 +71,7 @@ class PinEntryView extends Ui.View {
     // There is no reliable way to tell a color display from a monochrome
     // one, so the "Colored icons" setting decides here too (see README).
     _mColored = Utils.getProperty("coloredIcons", false) == true;
-    // The round sub-window in the top-right corner of the Instinct E and
-    // Instinct 3 (a Graphics.BoundingBox; getSubscreen() is 3.2.7+ and
-    // returns null without one), which the header keeps clear of. Not on
-    // round screens: the Instinct 3 AMOLED's sub-window is a virtual one,
-    // and a header moved left of it would run off the round edge.
-    _mSubscreen = null;
-    if (Ui has :getSubscreen && settings.screenShape != System.SCREEN_SHAPE_ROUND) {
-      _mSubscreen = Ui.getSubscreen();
-    }
+    _mSubscreen = LockConfirm.subscreen();
     _mCount = 0;
     _mWheel = 0;
     _mFocus = -1;
@@ -191,9 +183,8 @@ class PinEntryView extends Ui.View {
       dc.setAntiAlias(true);
     }
 
-    drawHeader(dc, width, height, _mColored);
-
     if (_mKeypad) {
+      drawKeypadHeader(dc, width, height);
       drawKeypad(dc, width, height, _mColored);
     } else {
       drawWheel(dc, width, height, _mColored);
@@ -201,11 +192,17 @@ class PinEntryView extends Ui.View {
   }
 
   // "Enter PIN", what it is for, and the four slots - filled once entered,
-  // the next one ringed.
-  hidden function drawHeader(dc, width, height, colored) {
+  // the next one ringed. The prompt's middle is at `promptY`, the detail
+  // line `toDetail` below it and the slots `toSlots` below that. Returns
+  // where the slots end.
+  hidden function drawHeader(dc, width, height, promptY, toDetail, toSlots) {
     var center = width / 2;
-    // A round screen is narrow this close to its top edge.
-    var textWidth = width * (Utils.isRectangularScreen() ? 0.9 : 0.62);
+    // A round screen is narrow close to its top edge, and the keypad's
+    // header is closer to it than the wheel's.
+    var textWidth = width * (Utils.isRectangularScreen() ? 0.9 : (_mKeypad ? 0.62 : 0.75));
+    var detailY = promptY + toDetail;
+    var slotY = detailY + toSlots;
+    var radius = slotRadius(height);
 
     if (_mSubscreen != null) {
       // Centred in the part left of the sub-window, so none of it runs
@@ -218,10 +215,10 @@ class PinEntryView extends Ui.View {
 
     var prompt = _mMessage != null ? _mMessage : "Enter PIN";
     dc.setColor(
-      _mMessage != null && colored ? 0xFF5555 : Graphics.COLOR_WHITE,
+      _mMessage != null && _mColored ? 0xFF5555 : Graphics.COLOR_WHITE,
       Graphics.COLOR_TRANSPARENT
     );
-    dc.drawText(center, height * 0.12, Graphics.FONT_SMALL, prompt, justify);
+    dc.drawText(center, promptY, Graphics.FONT_SMALL, prompt, justify);
 
     var detail = _mDetail != null ? _mDetail : _mTitle;
     var fitted = Graphics.fitTextToArea(
@@ -233,13 +230,8 @@ class PinEntryView extends Ui.View {
     );
 
     dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_TRANSPARENT);
-    dc.drawText(center, height * 0.205, Graphics.FONT_XTINY, fitted != null ? fitted : detail, justify);
+    dc.drawText(center, detailY, Graphics.FONT_XTINY, fitted != null ? fitted : detail, justify);
 
-    var slotY = height * 0.29;
-    var radius = height * 0.022;
-    if (radius < 4) {
-      radius = 4;
-    }
     var spacing = radius * 4;
 
     dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
@@ -256,28 +248,107 @@ class PinEntryView extends Ui.View {
     }
 
     dc.setPenWidth(1);
+
+    return slotY + radius;
   }
 
-  // The selected digit large in a band, its neighbours small above and
-  // below: up rolls towards the one above.
+  // Above the keypad there is little room: the header's three rows share
+  // 17 % of the height evenly, which is a little less than their fonts ask
+  // for on most watches and far more on an Edge. Where the fonts are large
+  // for the screen (Venu Sq 2: the two lines of text overlapped) the rows
+  // get 85 % of what the fonts ask for: by starting higher where the screen
+  // is rectangular, else by ending closer to the keypad.
+  hidden function drawKeypadHeader(dc, width, height) {
+    var promptHeight = dc.getFontHeight(Graphics.FONT_SMALL);
+    var detailHeight = dc.getFontHeight(Graphics.FONT_XTINY);
+    var radius = slotRadius(height);
+    var promptY = height * 0.12;
+    var toDetail = height * 0.085;
+    var toSlots = toDetail;
+    var wanted = ((promptHeight + detailHeight) / 2.0 + detailHeight / 2.0 + radius * 2.5) * 0.85;
+
+    if (toDetail + toSlots < wanted) {
+      toDetail = (promptHeight + detailHeight) / 2.0 * 0.85;
+      toSlots = wanted - toDetail;
+      promptY = height * 0.29 - wanted;
+
+      var highest = Utils.isRectangularScreen() ? promptHeight / 2.0 + height * 0.01 : height * 0.12;
+
+      if (promptY < highest) {
+        promptY = highest;
+      }
+    }
+
+    drawHeader(dc, width, height, promptY, toDetail, toSlots);
+  }
+
+  hidden function slotRadius(height) {
+    var radius = height * 0.022;
+    return radius < 4 ? 4 : radius;
+  }
+
+  // The header, and under it the wheel: the selected digit large in a band,
+  // its neighbours small above and below - up rolls towards the one above.
   hidden function drawWheel(dc, width, height, colored) {
-    var center = width / 2;
-    var y = height * 0.67;
+    var rectangular = Utils.isRectangularScreen();
     var bigFont = Graphics.FONT_NUMBER_MEDIUM;
     var smallFont = Graphics.FONT_SMALL;
     var bigHeight = dc.getFontHeight(bigFont);
-    var gap = (bigHeight + dc.getFontHeight(smallFont)) / 2;
-    var justify = Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER;
+    var smallHeight = dc.getFontHeight(smallFont);
+    var detailHeight = dc.getFontHeight(Graphics.FONT_XTINY);
+    var radius = slotRadius(height);
 
-    var bandWidth = dc.getTextWidthInPixels("8", bigFont) * 2;
-    var bandHeight = bigHeight * 0.9;
+    // The band around the digit, as `half` above and below the middle of
+    // its line. A number font's height says little about its digits: on a
+    // fenix 5 Plus they fill all of it, on a fenix 6 half of it (a band of
+    // nine tenths of the height, as this used to be, had the digit stick
+    // out on the former). What is known is where a digit ends: at the
+    // baseline, `reach` below the middle. Upwards it reaches about as far -
+    // up to 1.6 times on the devices there are. So the band is 1.8 times
+    // `reach` either way, but need not go beyond the font's own height, and
+    // stays 5 pixels clear of the baseline.
+    var reach = Graphics.getFontAscent(bigFont) - bigHeight / 2.0;
+    var half = reach * 1.8 + 2;
+    if (half > bigHeight / 2.0 + 2) {
+      half = bigHeight / 2.0 + 2;
+    }
+    if (half < reach + 5) {
+      half = reach + 5;
+    }
+
+    // The header's rows are as far apart as their fonts ask for (at the
+    // keypad's spacing the two lines of text touch on a fenix 5 Plus), and
+    // start lower on a round screen, where it is wider. On a small screen
+    // (Instinct) that leaves the wheel too little: there the rows move
+    // together by as much as it lacks.
+    var promptY = height * (rectangular || _mSubscreen != null ? 0.11 : 0.15);
+    var bottom = height * (rectangular ? 0.97 : 0.93);
+    var toDetail = (smallHeight + detailHeight) / 2.0;
+    var toSlots = detailHeight / 2.0 + radius * 2.5;
+    var squeeze = (bottom - promptY - radius - (half + smallHeight) * 2) / (toDetail + toSlots);
+
+    if (squeeze > 1) {
+      squeeze = 1;
+    } else if (squeeze < 0.7) {
+      squeeze = 0.7;
+    }
+
+    // The wheel is in the middle of what the header leaves of the screen.
+    var y = (drawHeader(dc, width, height, promptY, toDetail * squeeze, toSlots * squeeze) + bottom) / 2;
+    var center = width / 2;
+    var gap = half + smallHeight / 2;
+    var bandWidth = dc.getTextWidthInPixels("8", bigFont) * 2.2;
+    if (bandWidth < half * 2.4) {
+      bandWidth = half * 2.4;
+    }
+    var justify = Graphics.TEXT_JUSTIFY_CENTER | Graphics.TEXT_JUSTIFY_VCENTER;
 
     if (colored) {
       dc.setColor(0x1A2A3A, 0x1A2A3A);
-      dc.fillRoundedRectangle(center - bandWidth / 2, y - bandHeight / 2, bandWidth, bandHeight, 8);
+      dc.fillRoundedRectangle(center - bandWidth / 2, y - half, bandWidth, half * 2, half * 0.4);
     } else {
       dc.setColor(Graphics.COLOR_WHITE, Graphics.COLOR_TRANSPARENT);
-      dc.drawRoundedRectangle(center - bandWidth / 2, y - bandHeight / 2, bandWidth, bandHeight, 8);
+      dc.drawRoundedRectangle(center - bandWidth / 2, y - half, bandWidth, half * 2, half * 0.4);
     }
 
     dc.setColor(Graphics.COLOR_LT_GRAY, Graphics.COLOR_TRANSPARENT);
@@ -348,13 +419,8 @@ class PinEntryView extends Ui.View {
       if (key == KEY_DELETE) {
         drawDeleteGlyph(dc, x, y, radius * 0.55, ink, focused ? Graphics.COLOR_WHITE : face);
       } else if (key == KEY_CANCEL) {
-        // An "x".
-        var arm = radius * 0.35;
         dc.setColor(ink, Graphics.COLOR_TRANSPARENT);
-        dc.setPenWidth(3);
-        dc.drawLine(x - arm, y - arm, x + arm, y + arm);
-        dc.drawLine(x - arm, y + arm, x + arm, y - arm);
-        dc.setPenWidth(1);
+        LockConfirm.drawCross(dc, x, y, radius * 0.35, 3);
       } else {
         dc.setColor(ink, Graphics.COLOR_TRANSPARENT);
         dc.drawText(x, y, font, key.toString(), justify);

@@ -2,7 +2,7 @@
 
 These scripts drive the Connect IQ simulator without a person at the keyboard: they push a build,
 press the device's buttons, read the screen, and check what the widget sent to a mock Home Assistant.
-51 scenarios over six devices cover the lock confirmation, Wi-Fi/LTE execution, the loopback-http
+55 scenarios over six devices cover the lock confirmation, Wi-Fi/LTE execution, the loopback-http
 exception, the launch wait, the timer fix, the date/time editor, the entity storage and the glance. They have
 found five defects that the compiler cannot see: the sync-mode crash, the truncated Wi-Fi/LTE
 question, the Wi-Fi/LTE question hiding the value, the sensor-style values that were not persisted,
@@ -14,7 +14,7 @@ Memory crash at the end of a refresh once a 64 KB watch holds some two dozen ent
 Everything runs from this folder; nothing has to be copied anywhere. [uv](https://docs.astral.sh/uv/)
 manages the Python environment (`pyproject.toml`: python-xlib, pillow, numpy; `uv run` creates
 `.venv/` on first use). Besides uv the system needs `tesseract`, ImageMagick's `import`, `Xwayland`,
-`ss`, `openssl`, and a Connect IQ SDK (the one in `~/.Garmin/ConnectIQ/current-sdk.cfg`, or
+`ss`, `openssl`, `sway` (optional: it keeps the runs off your screen, see below), and a Connect IQ SDK (the one in `~/.Garmin/ConnectIQ/current-sdk.cfg`, or
 `CIQ_SDK`) with the developer key at `~/Programme/connectiq-sdk-manager/developer_key` (or `CIQ_KEY`).
 
 Everything a run produces goes under `work/` (gitignored; `CIQ_WORK` moves it): `work/variants2/`
@@ -55,7 +55,8 @@ uv run run.py f7_lock_pin_ok         # or scenarios by name or by feature
 `build-all.sh` runs the three build scripts and fails when one build fails: `build-variants2.sh`
 (the settings variants of the older scenarios; the `wifi*` ones against the TLS mock, because
 Wi-Fi/LTE refuses plain http), `build-dt-variants.sh` (the date/time variants) and `build-master.sh`
-(master, plain for the settings-upgrade scenario and pointed at the mock for the scenarios that
+(release 2.3.0 - the last one that stored the entity list as one array and knew none of the newer
+settings - plain for the settings-upgrade scenario and pointed at the mock for the scenarios that
 compare with it; `REF=v2.1.0 NAME=v210 ./build-master.sh` builds any other release the same way).
 
 Only one simulator can exist on a machine: it listens on a fixed port, keeps its apps under one
@@ -80,8 +81,8 @@ stray runners, simulators and monkeydo processes.
 ```sh
 uv run capacity.py instinct2x 12 18 24 28            # groups of n switches
 uv run capacity.py instinct2x 24 --mixed             # every supported type, repeated up to n
-uv run capacity.py instinct2x 24 --ref master        # a build of master instead of this tree
-uv run capacity.py instinct2x 24 --first-ref master  # master imports and stores, this tree takes over
+uv run capacity.py instinct2x 24 --ref v2.3.0        # a build of that release instead of this tree
+uv run capacity.py instinct2x 24 --first-ref v2.3.0  # 2.3.0 imports and stores, this tree takes over
 ```
 
 How many entities a build holds on a device, and what happens beyond that. For every n the mock
@@ -113,7 +114,13 @@ curl -s localhost:8123/_test/log | python3 -m json.tool
 ## How it works, and what bites
 
 The automated runs put the simulator on a private rootful Xwayland display (`:5`, `CIQ_DISPLAY`; started
-by the harness when missing), so the tests never touch the real desktop.
+by the harness when missing), so the tests never touch the keyboard, the mouse or the focus of the
+real desktop. Nor do they show on it: Xwayland draws on a Wayland compositor, and on the desktop's own
+its display is a window that comes up with every run - once per job with `runall.sh -j`. `display.sh`
+therefore gives it a compositor of its own that shows nothing (`sway` on the wlroots headless
+backend, its socket in `/tmp/ciq-display-<uid>-<display>`). To watch a run, stop the display and
+start the run with `CIQ_SHOW=1`: the display is then a window on the desktop, as it is on a machine
+without `sway`. `./display.sh` says which of the two is running.
 Everything below was learned the hard way; `ciqsim.py` carries the same notes at each method.
 
 - **Keyboard arrows and Enter do not reach the app, but Escape does - as the BACK button.** Device
@@ -141,7 +148,10 @@ Everything below was learned the hard way; `ciqsim.py` carries the same notes at
   scrolled by swiping. The vivoactive 3's button does not open the widget from its loop page; a tap
   does.
 - **The Cancel/Confirm dialog shows no selection** and the down button does not move between the two:
-  select confirms, back cancels.
+  select confirms, back cancels. That is the system's `Confirmation`, which only the Wi-Fi/LTE
+  question still uses (`Sim.confirm()`). The lock's question is a view of the widget's own, because
+  a second press of select must not confirm it: `Sim.lock_answer()` moves the focus or taps a key,
+  and `lock_focus()` reads which key has it.
 - **The system pops a `ProgressBar` on back by itself**, even when a delegate's `onBack()` returns
   true. A loader delegate that pops as well takes the view beneath with it (the Back-on-wait
   defect). This is why `LoaderDelegate` and `ConnectionWaitDelegate` only clear state and return

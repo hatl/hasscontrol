@@ -57,7 +57,7 @@ Simulator procedure:
 3. Build the **new** version, start it in the *same* simulator session, and confirm the previously stored entities are loaded (names and states intact), then that a refresh succeeds.
 4. Repeat on a low-mem device (release build) - the stored form differs per memory tier, so a migration that works on fenix7x can still be wrong on instinct2x.
 
-The simulator tests do this for the step from master to the current tree (`f7_storage_upgrade`, `i2_storage_upgrade`), and `uv run capacity.py <device> 24 --mixed --first-ref <tag>` does it for any release and list size. Add the release you are migrating from when you change what is stored.
+The simulator tests do this for the step from release 2.3.0 to the current tree (`f7_storage_upgrade`, `i2_storage_upgrade`), and `uv run capacity.py <device> 24 --mixed --first-ref <tag>` does it for any release and list size. Add the release you are migrating from when you change what is stored.
 
 ## Submitting
 

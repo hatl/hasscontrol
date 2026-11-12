@@ -3,8 +3,8 @@
 
     uv run capacity.py instinct2x 12 18 24 28            n switches each
     uv run capacity.py instinct2x 24 --mixed             every supported type, repeated up to n
-    uv run capacity.py instinct2x 24 --ref master        a build of master instead of this tree
-    uv run capacity.py instinct2x 24 --first-ref master  master imports and stores, this tree takes over
+    uv run capacity.py instinct2x 24 --ref v2.3.0        a build of that release instead of this tree
+    uv run capacity.py instinct2x 24 --first-ref v2.3.0  2.3.0 imports and stores, this tree takes over
 
 For every n the mock gets a group of n entities, then a release build pointed at it is run through
 what a watch goes through: a first launch (import, refresh, store), relaunches on the stored list

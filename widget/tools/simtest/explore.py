@@ -11,7 +11,7 @@ import sys
 import time
 
 sys.path.insert(0, __file__.rsplit("/", 1)[0])
-from ciqsim import Sim, Mock, MOCK_HTTP, MOCK_HTTPS, S, VARIANTS, LOWMEM, log
+from ciqsim import Sim, Mock, MOCK_HTTP, MOCK_HTTPS, S, VARIANTS, LOWMEM, ensure_mocks, log
 
 
 def main():
@@ -19,6 +19,7 @@ def main():
     variant = sys.argv[2]
     steps = sys.argv[3:] or ["shot:start"]
     sim = Sim(device, f"{S}/results/explore-{device}-{variant}")
+    ensure_mocks()
     mock = Mock(MOCK_HTTPS if device in LOWMEM else MOCK_HTTP)
     mock.reset()
     sim.start()

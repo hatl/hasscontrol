@@ -20,8 +20,15 @@ case "${1:-status}" in
         && echo "generated $MOCK/tls/cert.pem"
     fi
     cd "$MOCK"
-    [ -z "$(pid_on_port 8123)" ] && setsid nohup python3 -I "$HERE/mock_ha.py" --port 8123 > "$MOCK/http.log" 2>&1 < /dev/null &
-    [ -z "$(pid_on_port 8124)" ] && setsid nohup python3 -I "$HERE/mock_ha.py" --port 8124 --cert "$MOCK/tls/cert.pem" --key "$MOCK/tls/key.pem" > "$MOCK/tls.log" 2>&1 < /dev/null &
+    # `if`, not `[ ... ] && server &`: that puts a whole subshell into the background, which keeps
+    # this script's stdout open for as long as the server runs - and a caller that captures the
+    # output (capacity.py, live.py) then waits for ever.
+    if [ -z "$(pid_on_port 8123)" ]; then
+      setsid nohup python3 -I "$HERE/mock_ha.py" --port 8123 > "$MOCK/http.log" 2>&1 < /dev/null &
+    fi
+    if [ -z "$(pid_on_port 8124)" ]; then
+      setsid nohup python3 -I "$HERE/mock_ha.py" --port 8124 --cert "$MOCK/tls/cert.pem" --key "$MOCK/tls/key.pem" > "$MOCK/tls.log" 2>&1 < /dev/null &
+    fi
     sleep 2 ;;
 esac
 for port in 8123 8124; do printf '%s: %s\n' "$port" "$(pid_on_port $port | sed 's/^$/not running/')"; done

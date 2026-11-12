@@ -3,7 +3,8 @@
 
 The simulator runs inside a rootful Xwayland server on DISPLAY :5 (a plain X11
 display that only the tests use, so the user's keyboard, mouse and focus are
-never touched).  Device buttons are pressed by clicking their hotspots on the
+never touched; display.sh starts it on a headless compositor, so nothing of
+it shows on the desktop either).  Device buttons are pressed by clicking their hotspots on the
 device image (positions from the SDK's simulator.json), touch by clicking
 inside the display, screenshots via ImageMagick `import`, text via tesseract.
 
@@ -42,7 +43,7 @@ from Xlib import X, display as xdisplay, XK
 from Xlib.ext import xtest
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-# Everything a run produces - results, builds, mock logs, the Xwayland log - goes under one work
+# Everything a run produces - results, builds, mock logs, the display's logs - goes under one work
 # directory next to these sources (gitignored); CIQ_WORK moves it elsewhere.  S is the older name.
 WORK = os.environ.get("CIQ_WORK") or os.path.join(HERE, "work")
 S = WORK
@@ -117,20 +118,21 @@ def ensure_mocks():
     return True
 
 
-def ensure_display(geometry="1400x1000"):
-    """Start the private rootful Xwayland display if nothing serves it yet.  It is left running (a
-    cold start of the simulator is slow enough already); display.sh stops it.  Returns True when it
-    was started here."""
+def ensure_display():
+    """Start the private X display (display.sh) if nothing serves it yet.  It is left running (a cold
+    start of the simulator is slow enough already); display.sh stops it.  Returns True when it was
+    started here."""
     try:
         xdisplay.Display(DISPLAY).close()
         return False
     except Exception:
         pass
-    log(f"starting Xwayland {DISPLAY}")
+    log(f"starting the display {DISPLAY}")
     os.makedirs(WORK, exist_ok=True)
-    out = open(os.path.join(WORK, "xwayland.log"), "ab")
-    subprocess.Popen(["Xwayland", DISPLAY, "-geometry", geometry, "-noreset"], stdout=out, stderr=out,
-                     stdin=subprocess.DEVNULL, start_new_session=True)
+    started = subprocess.run([os.path.join(HERE, "display.sh"), "start"], stdout=subprocess.PIPE,
+                             stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, text=True)
+    for line in started.stdout.splitlines():
+        log(line)
     end = time.time() + 15
     while time.time() < end:
         try:
@@ -138,7 +140,7 @@ def ensure_display(geometry="1400x1000"):
             return True
         except Exception:
             time.sleep(0.25)
-    raise RuntimeError(f"Xwayland {DISPLAY} did not come up (see {WORK}/xwayland.log)")
+    raise RuntimeError(f"the display {DISPLAY} did not come up (see {WORK}/xwayland.log and sway.log)")
 
 
 class Device:
@@ -494,6 +496,64 @@ class Sim:
         else:
             self.back()
         log(f"confirm({yes})")
+        time.sleep(1.0)
+
+    # ------------------------------------------------------------------ lock question
+    # LockConfirmView: a cancel key on the left and a confirm key on the right, 22 % of the width
+    # either side of the middle.  How far down they are depends on the device's fonts, so that is
+    # read off the screen (see widget/source/Lock/LockConfirmView.mc).
+    def lock_has_focus(self):
+        """Does the lock question have a focus on this device?  Without a touch screen always; with
+        one only where up/down buttons can move it."""
+        return not self.dev.touch or (self.dev.has_key("up") and self.dev.has_key("down"))
+
+    def lock_key(self, confirm):
+        """Centre of the lock question's confirm (True) or cancel (False) key, in display coordinates.
+        A key is a circle of 13 % of the display's shorter side: the row is found where the screen is
+        lit at the top, bottom, left and right of such a circle - which neither the question's text
+        nor the bar an Edge or Montana keeps at the bottom of the display is."""
+        w, h = self.display_size()
+        r = min(w, h) * 0.13
+        x = w / 2 + (0.22 if confirm else -0.22) * w
+        img = np.asarray(self.display_shot().convert("L")) > 100
+
+        def lit(px, py):
+            px, py = int(round(px)), int(round(py))
+            return bool(img[max(py - 2, 0):py + 3, max(px - 2, 0):px + 3].any())
+
+        rows = [y for y in range(int(h * 0.3), int(h - r))
+                if lit(x, y - r) and lit(x, y + r) and lit(x - r, y) and lit(x + r, y)]
+        if not rows:
+            raise RuntimeError("no lock question on screen")
+        first = [y for y in rows if y - rows[0] <= 6]        # the first run of matching rows
+        return int(x), (first[0] + first[-1]) // 2
+
+    def lock_focus(self):
+        """Which key of the lock question has the focus: "cancel", "confirm" or None.  The focused
+        key is a filled disc, the other one an outline: what tells them apart is the ring between
+        the glyph in the middle and the edge."""
+        w, h = self.display_size()
+        r = min(w, h) * 0.13
+        img = np.asarray(self.display_shot().convert("L")) > 160
+        yy, xx = np.mgrid[0:img.shape[0], 0:img.shape[1]]
+        for name, confirm in (("cancel", False), ("confirm", True)):
+            x, y = self.lock_key(confirm)
+            d = np.hypot(xx - x, yy - y)
+            if img[(d > r * 0.55) & (d < r * 0.78)].mean() > 0.7:
+                return name
+        return None
+
+    def lock_answer(self, yes=True):
+        """Answer the lock question the way the device offers it.  With a focus: it starts on cancel,
+        so select alone cancels, and down moves it to confirm first.  Without one (a touch screen
+        and no up/down buttons) the key is tapped."""
+        if self.lock_has_focus():
+            if yes:
+                self.key("down")
+            self.key("enter")
+        else:
+            self.tap(*self.lock_key(yes))
+        log(f"lock_answer({yes})")
         time.sleep(1.0)
 
     # ------------------------------------------------------------------ PIN entry
@@ -1230,6 +1290,8 @@ class Sim:
         if self.dev.touch:
             w, h = self.display_size()
             attempts.append(("tap glance", lambda: self.tap(w // 2, h // 5)))
+            # On the tall Edge units (1050, Explore 3) the glance is a narrow strip at the very top.
+            attempts.append(("tap the first glance", lambda: self.tap(w // 2, h // 16)))
         if self.dev.has_key("enter"):
             attempts.append(("enter", lambda: self.key("enter")))
         if self.dev.has_key("start"):
