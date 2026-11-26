@@ -466,13 +466,48 @@ module Utils {
     dc.drawBitmap(x, y, drawable);
   }
 
+  // drawIcon(), the icon scaled by `transform` (a Graphics.AffineTransform),
+  // or as drawIcon() draws it when `transform` is null. A transform needs
+  // Dc.drawBitmap2 (supportsDrawBitmap2()); AffineTransform (API level
+  // 4.2.0) and the bilinear filter (4.2.1) are there wherever drawBitmap2
+  // (4.2.1) is. Used by the list view to draw the large icons at 60 px
+  // (EntityListView.drawListRow()).
+  //
+  // Should the scaled draw throw, the icon is drawn as drawIcon() draws it
+  // without a tint: at its own size, by Dc.drawBitmap(). Not a second
+  // drawBitmap2: the large icons are all in native format, so the tint is
+  // not what failed, and the same call would only throw again - uncaught,
+  // at every redraw of the list.
+  (:fullmem)
+  function drawIconScaled(dc, x, y, drawable, tintColor, transform) {
+    if (transform == null) {
+      drawIcon(dc, x, y, drawable, tintColor);
+      return;
+    }
+    // 1 is Graphics.FILTER_MODE_BILINEAR, which the compiler does not fold:
+    // looked up at run time, the name costs 8 bytes of code.
+    var options = {:transform => transform, :filterMode => 1};
+    try {
+      if (tintColor != null) {
+        options[:tintColor] = tintColor;
+      }
+      dc.drawBitmap2(x, y, drawable, options);
+    } catch (ex) {
+      drawIcon(dc, x, y, drawable, null);
+    }
+  }
+
   // What one entity icon takes once it is loaded, in bytes of heap - see
   // measureIconCost(). 0 until measured.
   var iconCost = 0;
 
-  // The entity icons are all 60x60 pixels, but what one takes in memory is
-  // up to the display: about 1 kB on an Instinct (4 colours), 3.7 kB on a
-  // watch with 8 bits per pixel, 7.3 kB in native 16-bit colour. The card
+  // The entity icons are 60x60 pixels (68 to 103 on the screens of 320 px
+  // and more, see resources-hires in monkey.jungle), and what one takes in
+  // memory is up to the display: about 1 kB on an Instinct (4 colours),
+  // 3.7 kB on a watch with 8 bits per pixel, 7.3 kB in native 16-bit colour,
+  // 14 kB at 83 px on a Venu, 32 kB at 103 px with an alpha channel on a
+  // Montana 7xx - and a few hundred bytes on Connect IQ 4+,
+  // which keeps bitmaps in the graphics pool rather than the heap. The card
   // view loads one for every redraw, in one piece - and an Out Of Memory
   // error cannot be caught. So the cost is measured once at launch, before
   // the entity list is loaded and while the heap is at its emptiest, and

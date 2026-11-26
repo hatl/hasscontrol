@@ -1,6 +1,10 @@
 <resources>
     <drawables>
         <bitmap id="LauncherIcon" filename="launcher_icon.png" />
+        <!-- The entity icons below are 60x60 (SmileySad 64x64). The screens of
+             320 px and more get every one of them larger, from resources-hires
+             (see monkey.jungle): an icon added here needs its SVG master there
+             too, then a run of tools/icons-render/render.py. -->
         <!-- automaticPalette="false": these icons are tinted at draw time via
              Dc.drawBitmap2(:tintColor), which requires a native color format
              bitmap. The compiler defaults to an auto-generated (indexed)
@@ -84,7 +88,8 @@
         <bitmap id="MdiFormatListBulleted" filename="mdi_format_list_bulleted.png" automaticPalette="false" />
         <bitmap id="MdiNumeric" filename="mdi_numeric.png" automaticPalette="false" />
         <!-- Rendered at 60x60 from the Material Design Icons glyphs (the same
-             way mdi_format_list_bulleted.png is): the date/time entities' icons. -->
+             way mdi_format_list_bulleted.png is): the date/time entities' icons.
+             Their masters - and every other icon's - are in resources-hires. -->
         <bitmap id="MdiCalendar" filename="mdi_calendar.png" automaticPalette="false" />
         <bitmap id="MdiClockOutline" filename="mdi_clock_outline.png" automaticPalette="false" />
         <bitmap id="MdiCalendarClock" filename="mdi_calendar_clock.png" automaticPalette="false" />

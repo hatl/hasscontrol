@@ -283,6 +283,7 @@ class EntityListView extends Ui.View {
   hidden var _mLastIndex;
   hidden var _mShowBar;
   hidden var _mIconCache; // entityId => { :drawable, :type, :state, :sensorClass, :icon, :deviceClass, :mode }
+  hidden var _mIconScale; // AffineTransform that draws a large icon at 60 px, made once; see drawListRow()
 
   function initialize(controller) {
     View.initialize();
@@ -290,6 +291,7 @@ class EntityListView extends Ui.View {
     _mLastIndex = null;
     _mShowBar = false;
     _mIconCache = {};
+    _mIconScale = null;
   }
 
   function onLayout(dc) {
@@ -609,7 +611,28 @@ class EntityListView extends Ui.View {
     var barW    = 4;   // bar width (at its narrowest, bottom)
     var barSkew = 15;  // top edge shifts right by this many px, creating the "/" angle
     var iconX   = leftMargin + barW + barSkew + 4; // 4 px clearance after bar's widest point
-    var textX   = iconX + 60 + 6;
+
+    // The row is laid out for a 60 px icon. The screens of 320 px and more
+    // have larger ones (resources-hires, see monkey.jungle), made for the
+    // card view; here they are scaled back to 60 px at draw time, so the list
+    // stays as it was. A device without Dc.drawBitmap2 cannot scale (among
+    // those screens the Venu, Venu D, D2 Air and Montana 7xx): it draws the
+    // icon at its own size, and the text starts that much further right.
+    // The transform is made from the first large icon: all of them have the
+    // same size, as resources-hires scales every one by the same factor.
+    var drawable = getCachedIconDrawable(entity);
+    var iconW   = drawable.getWidth();
+    var scale   = null;
+    if (iconW > 60 && Utils.supportsDrawBitmap2(dc)) {
+      if (_mIconScale == null) {
+        var f = 60.0 / iconW;
+        _mIconScale = new Graphics.AffineTransform();
+        _mIconScale.scale(f, f);
+      }
+      scale = _mIconScale;
+      iconW = 60;
+    }
+    var textX   = iconX + iconW + 6;
     var textMaxW = vw - textX - 5;
     var stateFont = Graphics.FONT_XTINY;
     var lineGap   = 2;
@@ -638,16 +661,13 @@ class EntityListView extends Ui.View {
     }
 
     // ── Icon (vertically centered) ────────────────────────────────────────────
-    var drawable = getCachedIconDrawable(entity);
-    if (drawable != null) {
-      var iconH = drawable.getHeight();
-      // On small screens the 60 px icon may be taller than the padded content
-      // area; fall back to centering within the full row height in that case.
-      var iconY = iconH <= cH
-        ? cY + (cH - iconH) / 2
-        : rowY + (rowHeight - iconH) / 2;
-      Utils.drawIcon(dc, iconX, iconY, drawable, Utils.getIconTintColor(entity));
-    }
+    // On small screens the icon may be taller than the padded content area;
+    // fall back to centering within the full row height in that case. (The
+    // icons are square: the drawn width is the drawn height.)
+    var iconY = iconW <= cH
+      ? cY + (cH - iconW) / 2
+      : rowY + (rowHeight - iconW) / 2;
+    Utils.drawIconScaled(dc, iconX, iconY, drawable, Utils.getIconTintColor(entity), scale);
 
     // ── Build text block ─────────────────────────────────────────────────────
     // Strip the "\n<sensor value>" suffix that getName() appends for sensors.

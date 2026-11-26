@@ -93,3 +93,24 @@ gpsmap67.resourcePath = $(gpsmap67.resourcePath);resources-launcher-38x33
 # 3.3) and has a 16-bit colour display and 64 KB: there an icon in native
 # format takes 7.3 kB of heap at every redraw, a paletted one 0.6 kB.
 venusq.resourcePath = $(venusq.resourcePath);resources-palette
+
+# ── Icon size ────────────────────────────────────────────────────────────────
+# The entity icons are 60x60 bitmaps, drawn unscaled: 21 % of the fenix 7X's
+# 280 px screen, but 13 % of a 454 px one. resources-hires redefines them for
+# the screens whose smaller side is 320 px or more, scaled by the compiler to
+# the fenix 7X proportion: 68 px at 320, 77 at 360, 83 at 390, 89 at 416,
+# 90 at 420, 96 at 448, 97 at 454, 100 at 466, 103 at 480 (see
+# tools/icons-render/render.py). Attached per screen size - the family
+# qualifiers of the SDK's default.jungle - so a new device of one of these
+# sizes gets them by itself; a new size of 320 px or more has to be added here.
+# Every other device keeps the 60x60 bitmaps, the 64 KB ones among them.
+rectangle-320x360.resourcePath = $(rectangle-320x360.resourcePath);resources-hires
+round-360x360.resourcePath = $(round-360x360.resourcePath);resources-hires
+rectangle-360x640.resourcePath = $(rectangle-360x640.resourcePath);resources-hires
+round-390x390.resourcePath = $(round-390x390.resourcePath);resources-hires
+round-416x416.resourcePath = $(round-416x416.resourcePath);resources-hires
+rectangle-420x600.resourcePath = $(rectangle-420x600.resourcePath);resources-hires
+rectangle-448x486.resourcePath = $(rectangle-448x486.resourcePath);resources-hires
+round-454x454.resourcePath = $(round-454x454.resourcePath);resources-hires
+round-466x466.resourcePath = $(round-466x466.resourcePath);resources-hires
+rectangle-480x800.resourcePath = $(rectangle-480x800.resourcePath);resources-hires
