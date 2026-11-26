@@ -3,3 +3,5 @@
 build
 bin
 .vscode
+build-personal.sh
+/widget/README.md
